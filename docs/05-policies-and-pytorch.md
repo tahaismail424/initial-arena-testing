@@ -27,12 +27,14 @@ So **"add a policy"** = get a class that implements `nav2_core::Controller` buil
 | `regulated_pure_pursuit` | RPP | Classical (path tracker, no dynamic avoidance) | ✅ |
 | `rotation_shim` | Rotation shim wrapping RPP (rotates in place first, then tracks) | Classical wrapper | ✅ |
 | `graceful` | `nav2_graceful_controller::GracefulController` | Classical | ✅ |
-| `drlvo` | `nav2py_drl_vo_controller::DRL_VO_Controller` | **Learned** (DRL-VO, PPO) | ❌ needs planners install |
-| `crowdnav` | `nav2py_pas_crowdnav_controller::PasCrowdNavController` | **Learned** (PaS CrowdNav) | ❌ |
-| `crowdnav_attngraph` | `nav2py_crowdnav_attngraph_controller::TemplateController` | **Learned** (CrowdNav++ attention graph) | ❌ |
-| `sicnav` | `nav2py_sicnav_controller::SicnavController` | Learned/MPC hybrid (SICNav) | ❌ |
+| `drlvo` | `nav2py_drl_vo_controller::DRL_VO_Controller` | **Learned** (DRL-VO, PPO) | ❌ needs planners install. ⚠️ Arena's wrapper feeds an **all-zero pedestrian map** (the original needed `pedsim_msgs`), so it runs on lidar + goal only |
+| `crowdnav` | `nav2py_pas_crowdnav_controller::PasCrowdNavController` | **Learned** (PaS CrowdNav) | ❌. Input = sequence of Nav2 **local costmaps** + robot state; unicycle; weights included. **Best-wired of the four.** |
+| `crowdnav_attngraph` | `nav2py_crowdnav_attngraph_controller::TemplateController` | **Learned** (CrowdNav++ attention graph) | ❌. ⚠️ **Prototype:** the human part of its input comes from CrowdNav's *own internal toy simulator*, not Arena's pedestrians, and the goal vector is sign-flipped |
+| `sicnav` | `nav2py_sicnav_controller::SicnavController` | MPC (SICNav), not neural | ❌. "Agents" = lidar points; a non-neural baseline |
 
 Global planners (`global_planner:=`): `navfn`, `smac_2d`, `smac_hybrid`, `smac_state_lattice`, `theta_star`. All installed.
+
+Status verified by reading each wrapper's source (2026-09-28). See the note below the table.
 
 If you pick an uninstalled one, Nav2's `controller_server` fails to configure with a pluginlib "class does not exist" error, and the robot never moves.
 
