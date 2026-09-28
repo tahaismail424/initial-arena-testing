@@ -1,0 +1,342 @@
+diff --git a/arena_bringup/configs/task_generator.yaml b/arena_bringup/configs/task_generator.yaml
+index e3c73a1c..aeef7ab4 100644
+--- a/arena_bringup/configs/task_generator.yaml
++++ b/arena_bringup/configs/task_generator.yaml
+@@ -1,5 +1,8 @@
+ /**:
+   ros__parameters:
++    # initial-arena-testing: end (and reset) an episode after this many SIM seconds even if the goal
++    # wasn't reached. Upstream default is -1 = never, which hangs benchmarks when a robot gets stuck.
++    timeout: 600  # must be an INTEGER: Arena declares this param with default -1 (int)
+     task:
+       parametrized:
+         file: default.xml
+diff --git a/arena_bringup/launch/arena.launch.py b/arena_bringup/launch/arena.launch.py
+index 977c02c7..f7136bbe 100644
+--- a/arena_bringup/launch/arena.launch.py
++++ b/arena_bringup/launch/arena.launch.py
+@@ -56,6 +56,13 @@ def generate_launch_description():
+         choices=['-1', '0', '1', '2'],
+         description='-1 = show all environments, 0 = show all, 1 = show only rviz, 2 = show nothing'
+     )
++    # initial-arena-testing: rviz:=false with headless:=0 -> Gazebo window only (no RViz, no RViz marker node)
++    rviz = LaunchArgument(
++        name='rviz',
++        default_value='true',
++        choices=['true', 'false'],
++        description='launch RViz (and its pedestrian marker publisher)'
++    )
+     human = LaunchArgument(
+         name='human',
+         description='human simulator to use',
+@@ -107,6 +114,19 @@ def generate_launch_description():
+         default_value='50',
+         description='space between environments'
+     )
++    # initial-arena-testing: how robots know their pose in Gazebo
++    localization = LaunchArgument(
++        name='localization',
++        default_value='amcl',
++        choices=['amcl', 'ground_truth'],
++        description='amcl = estimate pose from lidar + wheel odometry; ground_truth = use Gazebo true pose'
++    )
++    # initial-arena-testing: scenario file (worlds/<world>/scenarios/<file>) for tm_robots/tm_obstacles:=scenario
++    scenario = LaunchArgument(
++        name='scenario',
++        default_value='default.json',
++        description='scenario JSON in worlds/<world>/scenarios/ (overrides task.scenario.file in task_generator.yaml)'
++    )
+ 
+     def create_task_generators(
+         context: launch.LaunchContext,
+@@ -211,6 +231,9 @@ def generate_launch_description():
+                     **global_planner.dict,
+                     **world.dict,
+                     **record_data_dir.dict,
++                    **localization.dict,
++                    **scenario.dict,
++                    **rviz.dict,
+                     'namespace': namespace,
+                     'headless': headlessness,
+                     'reference': str(reference),
+diff --git a/task_generator/launch/task_generator.launch.py b/task_generator/launch/task_generator.launch.py
+index 1a85f736..6591674e 100644
+--- a/task_generator/launch/task_generator.launch.py
++++ b/task_generator/launch/task_generator.launch.py
+@@ -62,6 +62,22 @@ def generate_launch_description():
+         name='record_data_dir',
+         default_value='',
+     )
++    # initial-arena-testing: 'amcl' or 'ground_truth', forwarded to task_generator_node as a ROS param
++    localization = LaunchArgument(
++        name='localization',
++        default_value='amcl',
++    )
++    # initial-arena-testing: scenario file, applied AFTER parameter_file so it wins over task_generator.yaml
++    scenario = LaunchArgument(
++        name='scenario',
++        default_value='default.json',
++    )
++    # initial-arena-testing: rviz:=false skips RViz AND the RViz-only pedestrian marker publisher
++    # (together ~1.5 cores with 20 pedestrians) while keeping whatever `headless` says about Gazebo
++    rviz = LaunchArgument(
++        name='rviz',
++        default_value='true',
++    )
+ 
+     parameter_file = LaunchArgument(
+         name='parameter_file'
+@@ -86,6 +102,9 @@ def generate_launch_description():
+         )
+     )
+ 
++    # initial-arena-testing: RViz runs unless headless OR rviz:=false
++    rviz_enabled = PythonExpression(['"', rviz.substitution, '".lower() == "true" and not ', headless.substitution])
++
+     # Hunavsim Pedestrians in rviz
+     pedestrian_marker_node = launch_ros.actions.Node(
+         package="rviz_utils",
+@@ -103,7 +122,9 @@ def generate_launch_description():
+             {"namespace": namespace.substitution},
+         ],
+         output="screen",
+-        condition=launch.conditions.IfCondition(PythonExpression(['"', human.substitution, '" == "hunav"'])),
++        condition=launch.conditions.IfCondition(PythonExpression([
++            '"', human.substitution, '" == "hunav" and ', rviz_enabled,  # initial-arena-testing: only if RViz runs
++        ])),
+     )
+     # Start the rviz config generator which launches also rviz2 with desired config file
+     rviz_node = launch_ros.actions.Node(
+@@ -120,7 +141,7 @@ def generate_launch_description():
+             }
+         ],
+         output="screen",
+-        condition=launch.conditions.UnlessCondition(headless.substitution),
++        condition=launch.conditions.IfCondition(rviz_enabled),  # initial-arena-testing (was: unless headless)
+     )
+ 
+     task_generator_node = launch_ros.actions.Node(
+@@ -141,10 +162,12 @@ def generate_launch_description():
+                 **local_planner.str_param,
+                 **global_planner.str_param,
+                 **record_data_dir.str_param,
++                **localization.str_param,
+                 **reference.param(typing.List[float]),
+                 **prefix.str_param,
+             },
+             parameter_file.substitution,
++            {'task.scenario.file': scenario.substitution},  # initial-arena-testing
+         ],
+     )
+ 
+diff --git a/task_generator/task_generator/manager/robot_manager/robot_manager.py b/task_generator/task_generator/manager/robot_manager/robot_manager.py
+index 9f493815..4704a099 100644
+--- a/task_generator/task_generator/manager/robot_manager/robot_manager.py
++++ b/task_generator/task_generator/manager/robot_manager/robot_manager.py
+@@ -1,3 +1,4 @@
++import copy
+ import os
+ import typing
+ 
+@@ -81,6 +82,9 @@ class RobotManager(NodeInterface):
+         self._start_pos = Pose()
+         self._goal_pos = Pose()
+         self._is_goal_reached = False
++        # initial-arena-testing: Nav2 goal ids seen so far / belonging to previous episodes
++        self._known_goal_ids: set[bytes] = set()
++        self._stale_goal_ids: set[bytes] = set()
+ 
+         # Parameter handling
+         try:
+@@ -94,6 +98,9 @@ class RobotManager(NodeInterface):
+             self._safety_distance = 0.25
+             print(f"Warning: Using default values for robot parameters: {e}")
+ 
++        # initial-arena-testing: 'amcl' (upstream default) or 'ground_truth' (launch arg localization:=...)
++        self._ground_truth = self.node.rosparam[str].get('localization', 'amcl') == 'ground_truth'
++
+         self._robot = robot
+         self._robot.extra.setdefault('namespace', self.namespace)
+         self._pose = self._start_pos
+@@ -153,7 +160,10 @@ class RobotManager(NodeInterface):
+         )
+ 
+         self._launch_robot()
+-        self._odom_base_transform()
++        # initial-arena-testing: with ground-truth localization Gazebo publishes a real (moving)
++        # odom -> base_link, so this static identity transform would fight it. Skip it.
++        if not self._ground_truth:
++            self._odom_base_transform()
+ 
+         self._robot_radius = self.node.rosparam[float].get(
+             'robot_radius',
+@@ -190,6 +200,9 @@ class RobotManager(NodeInterface):
+         return self._is_goal_reached
+ 
+     def move_robot_to_pos(self, pose: Pose):
++        # initial-arena-testing: work on a copy. The caller passes the scenario's start pose, which is
++        # reused every episode, so adding z_offset in place made the robot spawn higher on each reset.
++        pose = copy.deepcopy(pose)
+         pose.position.z += self._config.model_params.z_offset
+         self._entity_manager.move_robot(name=self.name, pose=pose)
+         self.clearCostmapAroundRobot(5.0)
+@@ -230,6 +243,11 @@ class RobotManager(NodeInterface):
+         start_pos: typing.Optional[Pose],
+         goal_pos: typing.Optional[Pose],
+     ):
++        # initial-arena-testing: a new episode starts undone. Goals Nav2 already knows about belong to
++        # previous episodes, so remember their ids and ignore them in _goal_status_callback.
++        self._is_goal_reached = False
++        self._stale_goal_ids = set(self._known_goal_ids)
++
+         if start_pos is not None:
+             self._start_pos = self._environment_manager.realize(start_pos)
+             self.move_robot_to_pos(start_pos)
+@@ -324,7 +342,11 @@ class RobotManager(NodeInterface):
+                 # 'train_mode': self.node.declare_parameter('train_mode', False).value,
+                 'agent_name': self._robot.agent,
+                 'use_sim_time': 'True',
+-                'amcl': 'true' if self.node.conf.Arena.SIM.value in (Constants.SimSimulator.GAZEBO,) else 'false',
++                # initial-arena-testing: no AMCL when the robot is given its ground-truth pose
++                'amcl': 'true' if (
++                    self.node.conf.Arena.SIM.value in (Constants.SimSimulator.GAZEBO,)
++                    and not self._ground_truth
++                ) else 'false',
+             }
+ 
+             if self._robot.record_data_dir:
+@@ -363,8 +385,15 @@ class RobotManager(NodeInterface):
+         )
+ 
+     def _goal_status_callback(self, data: action_msgs.msg.GoalStatusArray):
+-        last_goal = next(reversed(data.status_list), None)
+-        self._is_goal_reached = last_goal and last_goal.status == action_msgs.msg.GoalStatus.STATUS_SUCCEEDED
++        # initial-arena-testing: Nav2 keeps finished goals in status_list for a while, so upstream's
++        # "last entry == SUCCEEDED" check kept seeing the PREVIOUS episode's success right after a reset
++        # and reset again every ~2 s. Only count goals sent during the current episode.
++        self._known_goal_ids = {bytes(s.goal_info.goal_id.uuid) for s in data.status_list}
++        self._is_goal_reached = any(
++            s.status == action_msgs.msg.GoalStatus.STATUS_SUCCEEDED
++            for s in data.status_list
++            if bytes(s.goal_info.goal_id.uuid) not in self._stale_goal_ids
++        )
+ 
+     def update(self):
+         """
+diff --git a/task_generator/task_generator/manager/world_manager/world_manager_ros.py b/task_generator/task_generator/manager/world_manager/world_manager_ros.py
+index cba43cd7..c724ed9d 100644
+--- a/task_generator/task_generator/manager/world_manager/world_manager_ros.py
++++ b/task_generator/task_generator/manager/world_manager/world_manager_ros.py
+@@ -254,6 +254,7 @@ class WorldManagerROS(MapServerHandler, WorldManager):
+             self.node.service_namespace('map'),
+             self._map_callback,
+             1,
++            callback_group=rclpy.callback_groups.MutuallyExclusiveCallbackGroup(),
+         )
+ 
+         while not self.check_map_server():
+diff --git a/task_generator/task_generator/simulators/human/hunav/hunav.py b/task_generator/task_generator/simulators/human/hunav/hunav.py
+index 92e51878..2e1475c2 100644
+--- a/task_generator/task_generator/simulators/human/hunav/hunav.py
++++ b/task_generator/task_generator/simulators/human/hunav/hunav.py
+@@ -84,6 +84,10 @@ class _PedestrianHelper:
+                         </visual>
+                     </link>
+                     <plugin name="HuNavSystemPluginIGN" filename="libHuNavSystemPluginIGN.so">
++                        <!-- initial-arena-testing: pedestrian update rate in SIM Hz. 1000 = every physics step (~30 Hz),
++                             the validated behaviour. Our hunav_gz_plugin patch makes lower values actually skip steps
++                             (15 Hz: sim ~3x faster), BUT pedestrians then walked at ~40% of their desired speed, so
++                             it stays at 1000 until that's understood. See docs/09 §5. -->
+                         <update_rate>1000.0</update_rate>
+                         <namespace>{namespace}</namespace>
+                         <!-- <robot_name>jackal</robot_name> -->
+@@ -94,6 +98,10 @@ class _PedestrianHelper:
+                         <ignore_models>
+                             <model>ground_plane</model>
+                             <model>sun</model>
++                            <!-- initial-arena-testing: Arena's walls (see gazebo_simulator.py _generate_wall_sdf).
++                                 Pedestrians still avoid them via the get_walls wall segments. -->
++                            <model>arena_wall_visual</model>
++                            <model>arena_wall_collision</model>
+                         </ignore_models>
+                     </plugin>
+                 </model>
+@@ -201,6 +209,7 @@ class HunavHumanSimulator(DummyHumanSimulator):
+         self._logger.debug("Initializing collections...")
+         self._pedestrians = {}
+         self._wall_points = []
++        self._wall_segments = []  # Maps may supply walls only through Gazebo geometry.
+         self._agents_container = Agents()  # Container to hold all registered agents
+         self._get_agents_container = Agents()  # Container specifically just to send the Agent attributes to Hunavsystemplugin
+         self._agents_container.header.frame_id = "map"
+diff --git a/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py b/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py
+index 56890073..7f665c2e 100644
+--- a/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py
++++ b/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py
+@@ -98,6 +98,13 @@ class GazeboSimulator(BaseSim):
+         self._walls_entities = []
+         self._wall_counter = itertools.count()
+ 
++        # initial-arena-testing: 'amcl' (upstream default) or 'ground_truth'.
++        # ground_truth bridges Gazebo's true model pose as <robot>/odom -> <robot>/base_link and pins
++        # map -> <robot>/odom to identity, so the robot's TF pose IS its Gazebo pose.
++        self._ground_truth = self.node.rosparam[str].get('localization', 'amcl') == 'ground_truth'
++        self._map_odom_published: set[str] = set()
++        self._logger.info(f"Localization mode: {'ground_truth' if self._ground_truth else 'amcl'}")
++
+     def before_reset_task(self):
+         self._logger.info("Pausing simulation before reset")
+         self.pause_simulation()
+@@ -173,6 +180,21 @@ class GazeboSimulator(BaseSim):
+                 if isinstance(entity, Robot):
+                     odom_frame = arena_simulation_setup.entities.robot.Robot(entity.model.name).model_params.odom_frame
+ 
++                if self._ground_truth:
++                    # Ground-truth odom is already expressed in the world (= map) frame, so map -> odom is
++                    # identity and never changes. Publish it once per robot instead of stacking a new static
++                    # publisher on every reset (the upstream code below does that).
++                    if name not in self._map_odom_published:
++                        self._map_odom_published.add(name)
++                        self.node.do_launch(launch_ros.actions.Node(
++                            package="tf2_ros",
++                            executable="static_transform_publisher",
++                            name="map_to_odomframe_publisher",
++                            arguments=["0", "0", "0", "0", "0", "0", "1", "map", entity.frame(odom_frame)],
++                            parameters=[{'use_sim_time': True}],
++                        ))
++                    return result.success
++
+                 qx, qy, qz, qw = entity.pose.orientation.x, entity.pose.orientation.y, entity.pose.orientation.z, entity.pose.orientation.w
+                 transform_pub_node = launch_ros.actions.Node(
+                     package="tf2_ros",
+@@ -434,7 +456,11 @@ class GazeboSimulator(BaseSim):
+             """
+             link_template = """
+             <link name="wall_segment_{index}">
+-                <visual name="visual">
++                <!-- initial-arena-testing: unique visual/collision names so the HuNav plugin can ignore them
++                     (<ignore_models> in hunav.py). HuNav turns every Gazebo box into an AXIS-ALIGNED box of its
++                     unrotated size, so rotated (north-south) walls became phantom east-west walls that trapped
++                     pedestrians. HuNav already gets the walls correctly from walls.yaml (get_walls service). -->
++                <visual name="arena_wall_visual">
+                     <geometry>
+                         <box>
+                             <size>{length} {thickness} {height}</size>
+@@ -444,7 +470,7 @@ class GazeboSimulator(BaseSim):
+                         <ambient>0.7 0.7 0.7 1</ambient>
+                     </material>
+                 </visual>
+-                <collision name="collision">
++                <collision name="arena_wall_collision">
+                     <geometry>
+                         <box>
+                             <size>{length} {thickness} {height}</size>
+@@ -506,6 +532,8 @@ class GazeboSimulator(BaseSim):
+         ).substitute({
+             'robot_name': robot.name,
+             'world': '/world/default',
++            # initial-arena-testing: which gz source feeds ROS odom + odom->base_link TF (see mappings.yaml)
++            'odom_source': '/ground_truth' if self._ground_truth else '',
+         })
+ 
+         bridge_arguments = mappings.as_args()

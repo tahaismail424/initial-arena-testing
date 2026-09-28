@@ -1,0 +1,34 @@
+diff --git a/src/HuNavSystemPlugin.cpp b/src/HuNavSystemPlugin.cpp
+index c05aa57..b549208 100644
+--- a/src/HuNavSystemPlugin.cpp
++++ b/src/HuNavSystemPlugin.cpp
+@@ -1620,10 +1620,12 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
+ 
+   //GZ_PROFILE("HuNavSystemPluginIGN::PreUpdate");
+ 
+-  _ecm.Each<gz::sim::components::Name>([&](const gz::sim::Entity &entity, const gz::sim::components::Name *name) {
+-    gzmsg << "Entity: " << entity << " Name: " << name->Data() << std::endl;
+-    return true;
+-});
++  // initial-arena-testing: removed a leftover debug loop that walked EVERY entity in the world and formatted a
++  // log line for each, on every physics step. Pure overhead; it capped the sim at ~1.3x real time with 20 pedestrians.
++  // _ecm.Each<gz::sim::components::Name>([&](const gz::sim::Entity &entity, const gz::sim::components::Name *name) {
++  //   gzmsg << "Entity: " << entity << " Name: " << name->Data() << std::endl;
++  //   return true;
++  // });
+ 
+   counter_++;
+ 
+@@ -1646,6 +1648,12 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
+   std::chrono::duration<double> dtDuration = _info.simTime - lastUpdate_;
+   double dt = dtDuration.count();
+ 
++  // initial-arena-testing: honour <update_rate>. Upstream parsed it but ran the full update (obstacle scan over every
++  // entity for every pedestrian + a blocking compute_agents service call) on EVERY physics step, which caps the
++  // whole simulation at ~1.4x real time with 20 pedestrians. dt above still covers the skipped steps.
++  if (update_rate_secs_ > 0.0 && dt < update_rate_secs_)
++    return;
++
+   lastUpdate_ = _info.simTime;
+ 
+   // Convert _info.simTime to std::chrono::steady_clock::time_point

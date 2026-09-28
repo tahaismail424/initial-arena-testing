@@ -1,0 +1,81 @@
+# Scenario SPEC for scripts/generate_scenario.py -> worlds/<world>/scenarios/<name>.json
+#
+# "Tame" first version of the high-school-hallway-after-the-bell scenario:
+# two-way foot traffic, a couple of distracted walkers, runners, friend groups, and
+# people entering from the side corridors. 20 pedestrians in a 60 x 12 m hallway.
+#
+# Coordinates come from worlds/<world>/world_params.yaml (L = length, W = width,
+# corridors at x = c, width w, sticking out s on each side). The robot drives +x along y = W/2.
+#
+# Every field under `hunav:` is passed straight to HuNav through the scenario JSON. Anything you
+# leave out falls back to agent1 in arena_bringup/configs/hunav_agents/default.yaml.
+# Gotchas (read from the code, see docs/09-hallway-scenarios.md):
+#   * social_force_factor defaults to 0 -> pedestrians walk THROUGH each other. Always set it.
+#   * goal_force_factor is hard-coded to 20 by Arena; the value here is ignored.
+#   * behavior type: 1 REGULAR (treats the robot as a person), 2 IMPASSIVE (treats it as an obstacle),
+#     3 SURPRISED, 4 SCARED, 5 CURIOUS, 6 THREATENING (these react when the robot gets close)
+
+name: hallway_tame
+seed: 0                     # same seed -> same start positions / routes / speeds
+model: actor1               # Gazebo actor used for every pedestrian (only actor1 is verified working)
+min_spacing: 1.2            # min distance between any two start positions (m)
+robot_clearance: 4.0        # no pedestrian starts within this distance of the robot's start (m)
+
+defaults:                   # applied to every class, then overridden per class
+  radius: 0.35
+  goal_radius: 0.6
+  cyclic_goals: true        # loop the route forever
+  behavior:
+    type: 1                 # REGULAR
+    social_force_factor: 5.0
+    obstacle_force_factor: 10.0
+
+classes:
+  # --- normal two-way traffic: people keep right, so +x walkers use the low-y half, -x walkers the high-y half
+  - name: walker_with_robot
+    count: 4
+    pattern: lane           # walk to the far end on your side, cross over, come back on the other side
+    direction: +x
+    speed: [1.1, 1.4]       # m/s, sampled uniformly per agent
+
+  - name: walker_toward_robot
+    count: 4
+    pattern: lane
+    direction: -x
+    speed: [1.1, 1.4]
+
+  # --- on their phone: slow, weaving across the hallway, react late to everyone (low social force)
+  - name: distracted
+    count: 2
+    pattern: zigzag         # weave between the two sides every `zigzag_step` metres
+    zigzag_step: 8.0
+    direction: both         # first one +x, second -x, ...
+    speed: [0.6, 0.8]
+    hunav:
+      behavior:
+        type: 2             # IMPASSIVE: the robot is just an obstacle to them
+        social_force_factor: 1.0
+        obstacle_force_factor: 4.0
+
+  # --- running late
+  - name: runner
+    count: 2
+    pattern: lane
+    direction: both
+    speed: [2.5, 3.0]
+    hunav:
+      radius: 0.4
+
+  # --- friends walking together: members share group_id, route and speed, and start next to each other
+  - name: friend_group
+    count: 2                # number of groups
+    group_size: [3, 2]      # members per group (one entry per group)
+    pattern: lane
+    direction: both
+    speed: [0.9, 1.1]
+
+  # --- coming out of a side corridor ("door"), joining the traffic, then leaving through another door
+  - name: from_corridor
+    count: 3
+    pattern: door_loop
+    speed: [1.0, 1.3]

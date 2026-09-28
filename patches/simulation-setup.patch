@@ -1,0 +1,140 @@
+diff --git a/configs/nav2/nav2.yaml b/configs/nav2/nav2.yaml
+index 14f55768..5d6fdff9 100644
+--- a/configs/nav2/nav2.yaml
++++ b/configs/nav2/nav2.yaml
+@@ -47,6 +47,10 @@ bt_navigator:
+     enable_groot_monitoring: True
+     groot_zmq_publisher_port: 1666
+     bt_loop_duration: 100
++    # initial-arena-testing: how long a BT action node waits for its server (planner/controller) to accept a
++    # request. Nav2 default is 20 ms; under load (20 HuNav pedestrians, ~0.7x real time) the planner missed it and
++    # the whole goal was aborted. Same value for every policy, so it doesn't bias comparisons.
++    default_server_timeout: 200
+     groot_zmq_server_port: 1667
+     action_server_timeout: 0.0
+     retry_max: 5
+diff --git a/entities/robots/jackal/mappings.yaml b/entities/robots/jackal/mappings.yaml
+index 6b4e42fb..e6eb0bf4 100644
+--- a/entities/robots/jackal/mappings.yaml
++++ b/entities/robots/jackal/mappings.yaml
+@@ -1,7 +1,9 @@
+ [
+   # Odometry (Gazebo -> ROS2)
++  # {odom_source} is filled in by gazebo_simulator.py: "" = wheel odometry from DiffDrive
++  # (localization:=amcl), "/ground_truth" = true pose from OdometryPublisher (localization:=ground_truth)
+   {
+-    "gz_topic": "/model/{robot_name}/odometry",
++    "gz_topic": "/model/{robot_name}{odom_source}/odometry",
+     "ros_topic": "odom",
+     "ros_type": "nav_msgs/msg/Odometry",
+     "gz_type": "gz.msgs.Odometry",
+@@ -39,9 +41,9 @@
+     "gz_type": "gz.msgs.PointCloudPacked",
+     "direction": "[",
+   },
+-  # TF Data (Gazebo -> ROS2)
++  # TF Data (Gazebo -> ROS2): <robot>/odom -> <robot>/base_link, same {odom_source} switch as above
+   {
+-    "gz_topic": "/model/{robot_name}/tf",
++    "gz_topic": "/model/{robot_name}{odom_source}/tf",
+     "ros_topic": "/tf",
+     "ros_type": "tf2_msgs/msg/TFMessage",
+     "gz_type": "gz.msgs.Pose_V",
+diff --git a/entities/robots/jackal/urdf/jackal.gazebo b/entities/robots/jackal/urdf/jackal.gazebo
+index 8b2f56e6..04185524 100644
+--- a/entities/robots/jackal/urdf/jackal.gazebo
++++ b/entities/robots/jackal/urdf/jackal.gazebo
+@@ -97,6 +97,23 @@
+     </plugin>
+   </gazebo>
+ 
++  <!-- Ground-truth pose (initial-arena-testing addition).
++       Publishes the model's TRUE pose as odometry + TF on its own gz topics.
++       It is only bridged into ROS when Arena runs with localization:=ground_truth
++       (see mappings.yaml {odom_source} and gazebo_simulator.py). -->
++  <gazebo>
++    <plugin
++      filename="gz-sim-odometry-publisher-system"
++      name="gz::sim::systems::OdometryPublisher">
++      <odom_frame>$(arg name)/odom</odom_frame>
++      <robot_base_frame>$(arg name)/base_link</robot_base_frame>
++      <odom_topic>/model/$(arg name)/ground_truth/odometry</odom_topic>
++      <tf_topic>/model/$(arg name)/ground_truth/tf</tf_topic>
++      <odom_publish_frequency>50</odom_publish_frequency>
++      <dimensions>2</dimensions>
++    </plugin>
++  </gazebo>
++
+ 
+   <gazebo reference="lidar_link">
+     <sensor name="gpu_lidar" type="gpu_lidar">
+diff --git a/worlds/hospital/scenarios/default.json b/worlds/hospital/scenarios/default.json
+index f70b41b5..b9861e1f 100644
+--- a/worlds/hospital/scenarios/default.json
++++ b/worlds/hospital/scenarios/default.json
+@@ -13,6 +13,7 @@
+         "id": 0,
+         "pos": [-0.72, -7.53, 0],
+         "type": "adult",
++        "model": "actor1",
+         "waypoints": [
+           [0, 15, 0]
+         ],
+@@ -23,6 +24,7 @@
+         "id": 0,
+         "pos": [-1, -1.5, 0],
+         "type": "adult",
++        "model": "actor1",
+         "waypoints": [
+           [0.32, 9, 0]
+         ],
+@@ -33,6 +35,7 @@
+         "id": 0,
+         "pos": [0.7, 9, 0],
+         "type": "adult",
++        "model": "actor1",
+         "waypoints": [
+           [-4.7, -18, 0]
+         ],
+@@ -43,6 +46,7 @@
+         "id": 0,
+         "pos": [-1, 2.94, 0],
+         "type": "adult",
++        "model": "actor1",
+         "waypoints": [
+           [-6, -20, 0],
+           [6, 6, 0]
+diff --git a/worlds/hospital/worlds/hospital.world b/worlds/hospital/worlds/hospital.world
+index 3e70658c..08f6e82c 100644
+--- a/worlds/hospital/worlds/hospital.world
++++ b/worlds/hospital/worlds/hospital.world
+@@ -1,12 +1,12 @@
+ <?xml version='1.0' encoding='UTF-8'?>
+ <sdf version="1.6">
+-  <world name="world">
++  <world name="default">
+     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+     <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
+     <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+-      <render_engine>ogre</render_engine>
++      <render_engine>ogre2</render_engine>
+     </plugin>
+   
+   
+@@ -17,11 +17,12 @@
+     </gui>  
+   
+   
++    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+     <gravity>0 0 -9.8</gravity>
+     <physics default="0" name="default_physics" type="ode">
+-      <max_step_size>0.001</max_step_size>
++      <max_step_size>0.0333</max_step_size>
+       <real_time_factor>1</real_time_factor>
+-      <real_time_update_rate>1000</real_time_update_rate>
++      <real_time_update_rate>0</real_time_update_rate>
+     </physics>
+     
+     <scene>

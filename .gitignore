@@ -1,0 +1,10 @@
+# uv / Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
