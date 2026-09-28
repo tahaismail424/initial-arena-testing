@@ -34,7 +34,7 @@ So **"add a policy"** = get a class that implements `nav2_core::Controller` buil
 
 Global planners (`global_planner:=`): `navfn`, `smac_2d`, `smac_hybrid`, `smac_state_lattice`, `theta_star`. All installed.
 
-Status verified by reading each wrapper's source (2026-09-28). See the note below the table.
+The learned-planner notes in the table were verified by reading each wrapper's source (2026-09-28).
 
 If you pick an uninstalled one, Nav2's `controller_server` fails to configure with a pluginlib "class does not exist" error, and the robot never moves.
 
