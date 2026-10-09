@@ -139,7 +139,7 @@ in the authors' own CrowdNav simulator. If it fails there, it would fail in Aren
 cd ~/Documents/Lyu_Lab/CrowdNav_DSRNN
 uv sync                      # creates .venv (first time builds RVO2 with cmake + Cython)
 MPLBACKEND=Agg uv run python test.py --model_dir data/example_model_unicycle --test_model 55554.pt   # 500 episodes, ~3 min on CPU
-uv run python test.py --model_dir data/example_model_unicycle --test_model 55554.pt --visualize --test_case 0   # watch one (needs a display)
+uv run python test.py --model_dir data/example_model_unicycle --test_model 55554.pt --visualize   # watch episodes (see doc 11)
 ```
 
 Results go to `data/example_model_unicycle/test/test_55554.pt.log` (the authors' original is kept as `.log.upstream`).
@@ -159,6 +159,8 @@ Results go to `data/example_model_unicycle/test/test_55554.pt.log` (the authors'
 | `pytorchBaselines/evaluation.py` | `float(...)` around the cumulative reward | Rewards are torch tensors, and numpy ≥1.20's `np.average` crashes on a list of them (at the very end, after all 500 episodes) |
 | same | Path length uses robot_node indices 0, 1 (px, py), not 1, 2 (py, radius) | Upstream bug: gave nonsense path lengths |
 | same | Skip the path/CHC update on the terminal step | The vec env auto-resets, so the last `obs` is the next episode's start. That added a 6–12 m jump to every path. |
+| CrowdNav_DSRNN `pyproject.toml` | Added `pyqt5` | uv's Python has a tkinter that matplotlib 3.7 can't load, so `--visualize` silently fell back to `agg` (no window) |
+| baselines `setup.py` | `opencv-python` → `opencv-python-headless` | OpenCV's bundled Qt plugins broke the matplotlib Qt window ("could not load the Qt platform plugin xcb") |
 
 All code edits carry a `Lyu Lab local change` comment (`grep -rn "Lyu Lab local change"`). Both repos are upstream
 clones, so these edits should go on `lyu-lab` branches of your forks.

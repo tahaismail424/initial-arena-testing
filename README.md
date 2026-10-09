@@ -20,6 +20,8 @@ Arena's upstream docs describe older versions in places. When the docs and the c
 | 7 | [Study plan](docs/07-study-plan.md) | Hands-on exercises that build up to the policy comparison |
 | 8 | [Ground-truth localization](docs/08-ground-truth-localization.md) | Worked example of adding a configurable feature to Arena (the `localization` switch) |
 | 9 | [Hallway crowd scenarios](docs/09-hallway-scenarios.md) | Spec → JSON → HuNav: agent classes, what every field does, and the pitfalls we hit |
+| 10 | [Learned planners](docs/10-learned-planners.md) | nav2py install, PaS-CrowdNav bring-up, planner build status, DS-RNN native-sim setup |
+| 11 | [DS-RNN native sim tour](docs/11-dsrnn-native-sim-tour.md) | Visualizing DS-RNN, what code actually runs, observation/action/reward, configurables, porting notes |
 
 ## Quick start
 
