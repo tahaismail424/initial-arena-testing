@@ -125,3 +125,40 @@ check it prints nav2py's handshake (port + magic bytes 187 201) and survives 40 
   (`wheel` must be 0.38.0: SICNav pins it exactly.)
 * A **failed** package leaves a half-made `install/<pkg>` that makes every `source arena.bash` print
   `not found: .../local_setup.bash`. Delete `install/<pkg>` and `build/<pkg>` if you give up on a package.
+## 7. DS-RNN in its native simulator (sanity check before porting)
+
+Before wiring DS-RNN into Arena, we confirmed that the pretrained **unicycle** checkpoint reproduces its published numbers
+in the authors' own CrowdNav simulator. If it fails there, it would fail in Arena too.
+
+- Code: `~/Documents/Lyu_Lab/CrowdNav_DSRNN` (upstream: Shuijing725/CrowdNav_DSRNN)
+- Dependency: `~/Documents/Lyu_Lab/baselines` (openai/baselines; only `vec_env`, `logger`, `bench` are used)
+- Environment: uv, defined by a local `pyproject.toml` in CrowdNav_DSRNN (Python 3.8, CPU torch 1.7.1, gym 0.15.7,
+  numpy 1.23, baselines editable from `../baselines`, Python-RVO2 built from git). No TensorFlow.
+
+```bash
+cd ~/Documents/Lyu_Lab/CrowdNav_DSRNN
+uv sync                      # creates .venv (first time builds RVO2 with cmake + Cython)
+MPLBACKEND=Agg uv run python test.py --model_dir data/example_model_unicycle --test_model 55554.pt   # 500 episodes, ~3 min on CPU
+uv run python test.py --model_dir data/example_model_unicycle --test_model 55554.pt --visualize --test_case 0   # watch one (needs a display)
+```
+
+Results go to `data/example_model_unicycle/test/test_55554.pt.log` (the authors' original is kept as `.log.upstream`).
+
+| | success | collision | timeout | nav time | path length | CHC |
+|---|---|---|---|---|---|---|
+| Authors' log (2021) | 0.88 | 0.12 | 0.00 | 11.79 s | 11.06 m | 22.97 |
+| Ours (CPU, 2026-10-09) | 0.89 | 0.11 | 0.00 | 11.87 s | 10.94 m | 21.28 |
+
+### What had to change
+
+| Where | Change | Why |
+|---|---|---|
+| CrowdNav_DSRNN `pyproject.toml` (new) | uv project, `package = false`, CPU torch index, `pyrvo2` from git with `cython<3` as an extra build dep | Upstream only has a README list (Python 3.6, torch ≤1.7.1). Python 3.8 is the newest CPython with torch 1.7.1 wheels. The RVO2 distribution is named `pyrvo2` (the module is still `import rvo2`), and its `setup.py` imports Cython at build time. |
+| baselines `setup.py` | The "TensorFlow needed" `assert` became a warning | It refuses to install without TF, but DS-RNN never touches TF code. uv's build-only deps didn't help, because the assert also fires while uv queries build requirements. |
+| CrowdNav_DSRNN `test.py` | `config.training.cuda = config.training.cuda and torch.cuda.is_available()` | The saved config says `cuda = True`, so it crashes on this CPU-only VM |
+| `pytorchBaselines/evaluation.py` | `float(...)` around the cumulative reward | Rewards are torch tensors, and numpy ≥1.20's `np.average` crashes on a list of them (at the very end, after all 500 episodes) |
+| same | Path length uses robot_node indices 0, 1 (px, py), not 1, 2 (py, radius) | Upstream bug: gave nonsense path lengths |
+| same | Skip the path/CHC update on the terminal step | The vec env auto-resets, so the last `obs` is the next episode's start. That added a 6–12 m jump to every path. |
+
+All code edits carry a `Lyu Lab local change` comment (`grep -rn "Lyu Lab local change"`). Both repos are upstream
+clones, so these edits should go on `lyu-lab` branches of your forks.
