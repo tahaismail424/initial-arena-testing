@@ -42,6 +42,7 @@ These live in the upstream checkouts. A `git pull` / `vcs import` / reinstall co
 | File | Change | Why |
 |---|---|---|
 | `src/HuNavSystemPlugin.cpp` `PreUpdate` | Commented out a leftover debug loop that logged every entity every step | Pure overhead |
+| same + `include/.../HuNavSystemPlugin.h` | `lastUpdate_` initialised to 0, and a negative `dt` never counts as "too soon" | **Bug in our first update_rate patch:** `lastUpdate_` was uninitialised, so on the CPU VM garbage made `dt` negative and the plugin skipped every step. Pedestrians stood still from episode 1 (found 2026-10-09). |
 | same | `<update_rate>` is now honoured (steps are skipped below the rate) | Upstream parsed it but never used it. With the value at 1000 nothing changes; lower values speed the sim up but slowed pedestrians ([09 §5](09-hallway-scenarios.md#5-performance-notes--running-faster-than-real-time)) |
 
 See the current state any time with:
