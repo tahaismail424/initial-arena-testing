@@ -1,6 +1,6 @@
 # Campus world handoff (campus agent)
 
-Last update: 2026-10-11 21:55 UTC
+Last update: 2026-10-11 22:30 UTC
 
 ## Done
 - `scripts/generate_campus.py`: TODOs implemented (free space union + checks, walls via gen_walls, map.png,
@@ -25,6 +25,15 @@ Last update: 2026-10-11 21:55 UTC
 - Findings to act on: (1) first reset after launch: pedestrians jump 5-8.5 m (later resets ~0.6 m) -> warmup
   scenario; (2) pedestrian-pedestrian overlap frequent in dense flows (door: 87% of samples have a pair < 0.4 m)
   -> investigating (social_force_factor / density).
+
+- Gotcha found: integer force factors (e.g. 12) in a scenario make Arena DROP the agent ("must be of type
+  'float'"); Builder now coerces, check_scenario rejects non-floats.
+- Force tuning (pedestrian overlap): variants worlds/campus/scenarios/tune_*_sf12/sf20.json (temporary, not
+  committed) running in campus_verification/data/tune_forces2 (hot_switch.py, DWB, timeout 70 s).
+  Baseline sf5/of10: overlap (<0.4 m) share of pedestrian-time 23-24% door/corridor, 3% intersection, 9% plaza.
+- Infra test files (ilt_*, spike_*) removed from repo + Arena links (coordinator OK'd).
+- Scheduler: arena_batch.py (infra, multi-scenario) has no episode-timeout / warmup option; hot_switch.py kept for
+  --timeout + warmup.json.
 
 ## Next
 - Fix ped overlap, re-pilot; then the run matrix: 5 templates x 3 seeds x {dwb, dsrnn} (1-2 eps) + gauntlet x 2

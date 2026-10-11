@@ -104,6 +104,13 @@ class Builder:
         cls: a short class name (ends up in the agent's name, e.g. 'oncoming_3'; handy in analysis).
         hunav: per-pedestrian overrides of the spec's `defaults` (e.g. {"behavior": {"type": 6}})."""
         fields = deep_merge(self.spec["defaults"], hunav)
+        # Arena's HuNav adapter asserts float types (an int force factor in the YAML, e.g. 12, makes it drop the
+        # agent with "must be of type 'float'": the episode silently runs without that pedestrian)
+        for k in ("radius", "goal_radius"):
+            if k in fields:
+                fields[k] = float(fields[k])
+        fields["behavior"] = {k: float(v) if k.endswith("_factor") or k in ("vel", "dist") else v
+                              for k, v in fields.get("behavior", {}).items()}
         n = sum(a["class"] == cls for a in self.agents)
         self.agents.append({
             "name": f"{cls}_{n}",
@@ -549,6 +556,9 @@ def check_scenario(scenario, campus):
         if not robot_ok.contains(Point(scenario["robots"][0][k][:2])):
             problems.append(f"robot {k} {scenario['robots'][0][k][:2]} too close to a wall/panel")
     for a in scenario["obstacles"]["dynamic"]:
+        bad = [k for k, v in a.get("behavior", {}).items() if k.endswith("_factor") and not isinstance(v, float)]
+        if bad or not isinstance(a.get("desired_velocity"), float):
+            problems.append(f"{a['name']}: non-float {bad or 'desired_velocity'} (Arena drops such agents)")
         pts = [tuple(a["pos"][:2])] + [tuple(w[:2]) for w in a["waypoints"]]
         for q in pts:
             if not pt_ok.contains(Point(q)):

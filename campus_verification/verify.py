@@ -134,6 +134,11 @@ def human_checks(ep, scen, cmp):
         events += 1 + int((np.diff(ts) > 0.5).sum())
     out["pp_events"] = events
     out["pp_seconds"] = float(sum(len(v) for v in pairs.values()) * 0.1)
+    # share of pedestrian-samples spent overlapping someone (< PP_CONTACT); brushing past is ~1-3 samples
+    agent_samples = len(h.drop_duplicates(["t", "name"]))
+    out["pp_frac"] = 2 * sum(len(v) for v in pairs.values()) / max(agent_samples, 1)
+    out["pp_long"] = sum(1 for ts in pairs.values() for run in np.split(np.sort(ts), np.where(np.diff(np.sort(ts)) > 0.5)[0] + 1)
+                         if len(run) and run[-1] - run[0] >= 2.0)          # overlaps lasting >= 2 s
     out["pp_min"] = dmin
 
     # stuck pedestrians and speeds
@@ -296,7 +301,7 @@ def main():
         df.to_csv(args.out, index=False)
     with pd.option_context("display.max_columns", None, "display.width", 250, "display.max_colwidth", 80):
         cols = [c for c in ["scenario", "planner", "episode", "outcome", "duration", "collisions", "min_clearance",
-                            "min_obstacle_clear", "freeze_time", "h_inside", "h_max_pen", "pp_events", "pp_min",
+                            "min_obstacle_clear", "freeze_time", "h_inside", "h_max_pen", "pp_events", "pp_frac", "pp_long", "pp_min",
                             "stuck", "stuck_by_robot", "speed_ratio"] if c in df]
         print(df[cols].round(2).to_string(index=False))
     return df
