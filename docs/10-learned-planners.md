@@ -164,3 +164,28 @@ Results go to `data/example_model_unicycle/test/test_55554.pt.log` (the authors'
 
 All code edits carry a `Lyu Lab local change` comment (`grep -rn "Lyu Lab local change"`). Both repos are upstream
 clones, so these edits should go on `lyu-lab` branches of your forks.
+
+## 8. DS-RNN in Arena (`nav2py_dsrnn_controller`)
+
+Repo: `~/arena_ws/src/planners/nav2py_dsrnn_controller` (yours). Run it with `local_planner:=dsrnn`
+(config: `simulation-setup/configs/nav2/controllers/dsrnn/controller_config.yaml`, 10 Hz).
+
+| Layer | File | Job |
+|---|---|---|
+| C++ plugin | `src/dsrnn_controller.cpp` | Subscribes to `/task_generator_node/human_states` (HuNav, map frame, ~30 Hz). Each tick sends ONE `state` YAML message: robot pose (map frame), next ~10 m of the plan plus the final goal, pedestrians `[id, x, y]`. Waits for (v, w). |
+| Socket I/O | `nav2py_dsrnn_controller/__main__.py` | Parses `state`, calls `DSRNNController.step()`, always replies exactly once (`(0, 0)` on any error). |
+| Adapter | `dsrnn_controller.py: DSRNNController` | Arena data → DS-RNN inputs: 5 stable pedestrian slots, subgoal 4 m along the plan, recentring, ±0.1 clip, running speed. Pure Python. |
+| Network | `dsrnn_controller.py: DSRNNPolicy` | Vendored DS-RNN net + `models/55554.pt`. |
+
+Tests (native simulator, no ROS): `tests/native_sim_check.py --mode policy|adapter [--offset 30] [--path]`.
+Policy: 0.89 success (= authors). Adapter with ±30 m offsets: 0.89; without recentring: 0.29.
+
+**Build gotcha:** after changing the Python code, nav2py's CMake recreates the venv and newer uv refuses to
+overwrite it ("A virtual environment already exists"). Build with:
+`UV_VENV_CLEAR=1 colcon build --symlink-install --packages-select nav2py_dsrnn_controller`.
+
+**First Arena run (hallway_tame, 2026-10-11):** episode 1 reached the goal (1, 6) → (59, 6) in ~140 s through
+20 pedestrians (DWB: ~296 s, but capped at 0.26 m/s). Known issues:
+- Nav2's `velocity_smoother` runs with defaults (max 0.5 m/s, 2.5 rad/s): DS-RNN commands 1.0 m/s, robot gets 0.5.
+- The policy steers bang-bang (w = ±1 rad/s, ±0.3 rad weave) even with nobody around.
+- Episode 2 had no pedestrians (the HuNav reset bug, [09](09-hallway-scenarios.md)).
