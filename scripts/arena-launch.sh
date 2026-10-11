@@ -2,9 +2,13 @@
 # Launch Arena (Gazebo + HuNav + Jackal + Nav2) on a Lyu Lab VM.
 # Run from a terminal in the VM's graphical desktop (or with DISPLAY=:1). Ctrl+C stops everything.
 #
-# Usage: arena-launch.sh [world] [task_mode] [extra ros2 launch args...]
+# Usage: arena-launch.sh [--headless] [world] [task_mode] [extra ros2 launch args...]
+#   --headless   no windows at all (same as headless:=2). Saves ~1 core of Gazebo GUI rendering; see docs/09 §5.
+#
+# Examples:
+#   arena-launch.sh --headless school_hallway scenario scenario:=hallway_tame.json   # crowd, no windows (benchmarks)
 #   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json rviz:=false   # crowd, Gazebo window only
-#   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json headless:=2   # crowd, no windows
+#   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json              # Gazebo + RViz (heaviest)
 #   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json local_planner:=crowdnav
 #   arena-launch.sh map_empty explore                                                 # random-goal demo
 #   arena-launch.sh school_hallway scenario localization:=amcl                       # estimated pose
@@ -17,6 +21,16 @@
 #   * NVIDIA GPU present  -> run under VirtualGL on the GPU (`vglrun -d egl0`)        [arena-dev, L4]
 #   * no GPU              -> Mesa software rendering (llvmpipe) on the CPU            [arena-dev-cpu]
 #   Force one with ARENA_RENDER=gpu or ARENA_RENDER=cpu.
+
+# Options (must come before the positional args).
+EXTRA=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --headless) EXTRA+=(headless:=2); shift ;;
+    -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) break ;;
+  esac
+done
 
 WORLD="${1:-hospital}"
 MODE="${2:-scenario}"
@@ -45,7 +59,7 @@ source arena.bash
 unset FASTRTPS_DEFAULT_PROFILES_FILE
 
 ARGS=(sim:=gazebo human:=hunav world:="$WORLD" robot:=jackal
-      "${TM[@]}" local_planner:=dwb global_planner:=navfn localization:=ground_truth "$@")
+      "${TM[@]}" local_planner:=dwb global_planner:=navfn localization:=ground_truth "${EXTRA[@]}" "$@")
 
 if [ "$RENDER" = gpu ]; then
   echo "[arena-launch] rendering on the NVIDIA GPU (VirtualGL)"

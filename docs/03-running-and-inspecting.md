@@ -55,8 +55,9 @@ ps -eo pid,etime,args | grep -E 'gz sim|ros2 launch' | grep -v grep
 
 Things you **can't** set from the command line, because they're only in `task_generator.yaml`: random obstacle counts, episode count, timeout (now 600 sim-seconds). The scenario file *can* now be set, with `scenario:=`. See [04](04-configuring-sim-and-robot.md).
 
-**Benchmark runs: use `headless:=2`.** With 20 pedestrians, the Gazebo GUI + RViz overloaded the 8-core VM and made
-Nav2 time out ([09 §5](09-hallway-scenarios.md#5-performance-notes)).
+**Benchmark runs: use `headless:=2`** (or `arena-launch.sh --headless ...`). With 20 pedestrians, the Gazebo GUI + RViz
+overloaded the 8-core VM and made Nav2 time out. The Gazebo window alone costs ~1 core; measurements in
+[09 §5](09-hallway-scenarios.md#5-performance-notes--running-faster-than-real-time).
 
 ## Checking a run from a second terminal
 

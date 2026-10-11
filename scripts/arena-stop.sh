@@ -5,6 +5,8 @@
 # 1. Ctrl+C equivalent (SIGINT) to `ros2 launch`, so it can shut its nodes down in order.
 # 2. Wait up to 20 s for it to exit.
 # 3. Force-kill anything Arena-related that is still alive (Gazebo often lingers).
+# nav2py planners run as `nav2py_run` -> `<venv>/bin/python -m nav2py_<name>`. The python child is NOT killed
+# when ros2 launch exits; orphans kept spinning at ~80% CPU each, so both are listed below.
 # Patterns use the [x]yz trick so pgrep/pkill never match this script's own command line.
 
 if pgrep -f "[r]os2 launch arena_bringup" >/dev/null; then
@@ -16,7 +18,7 @@ if pgrep -f "[r]os2 launch arena_bringup" >/dev/null; then
   done
 fi
 
-LEFTOVERS='[g]z sim|[t]ask_generator_node|[h]unav_agent_manager|[c]ontroller_server|[p]lanner_server|[b]t_navigator|[p]arameter_bridge|[r]viz2|[s]tatic_transform_publisher|[n]av2py_run'
+LEFTOVERS='[g]z sim|[t]ask_generator_node|[h]unav_agent_manager|[c]ontroller_server|[p]lanner_server|[b]t_navigator|[p]arameter_bridge|[r]viz2|[s]tatic_transform_publisher|[n]av2py_run|[v]env/bin/python -m nav2py_'
 if pgrep -f "$LEFTOVERS" >/dev/null; then
   echo "force-killing leftovers:"
   pgrep -af "$LEFTOVERS" | cut -c1-100

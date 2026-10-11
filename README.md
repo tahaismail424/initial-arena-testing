@@ -30,7 +30,7 @@ cd ~/Documents/Lyu_Lab/initial-arena-testing
 uv run scripts/generate_hallway.py -n school_hallway --link                  # world
 uv run scripts/generate_scenario.py scenarios/hallway_tame.yaml --link       # crowd
 bash scripts/arena-launch.sh school_hallway scenario scenario:=hallway_tame.json               # watch
-bash scripts/arena-launch.sh school_hallway scenario scenario:=hallway_tame.json headless:=2   # benchmark
+bash scripts/arena-launch.sh --headless school_hallway scenario scenario:=hallway_tame.json    # benchmark (no windows)
 ```
 
 Run the launch from a terminal in the VM's graphical desktop. `Ctrl+C` stops everything. After `--link` creates *new*

@@ -109,10 +109,34 @@ rebuilding `hunav_gz_plugin` (C++). It's a good future task if reactive crowds m
 
 | Want | Args |
 |---|---|
-| nothing (benchmarks) | `headless:=2` |
+| nothing (benchmarks) | `headless:=2`, or `arena-launch.sh --headless ...` |
 | Gazebo window only, no RViz | `rviz:=false` (*our addition*: also stops the RViz-only pedestrian marker publisher, ~0.6 core) |
 | RViz only | `headless:=1` |
 | everything | (default) |
+
+**Measured cost of the Gazebo window** (2026-10-11, CPU-only VM, 8 cores, `hallway_tame.json`, `local_planner:=dsrnn`,
+40 s window inside episode 1, `top` + `/clock` vs wall clock):
+
+| Mode | Whole machine busy | `gz sim` server | `gz sim` GUI | Real-time factor |
+|---|---|---|---|---|
+| `rviz:=false` (Gazebo window) | 5.7 cores | 2.2 cores | **1.0 core** (+ ~0.15 for the VNC X server) | 1.00 |
+| `headless:=2` / `--headless` | 5.3 cores | 2.3 cores | – | 0.99 |
+
+What this means:
+* **Headless saves about one core** (the GUI process renders the 3-D scene with Mesa llvmpipe on the CPU).
+  The real-time factor does not change, because Gazebo **paces itself to 1×** and 8 cores are enough for both. The
+  saving matters when you raise `real_time_factor` (below) or run two sims side by side.
+* **Rendering can't be switched off completely.** Even with `-s` (server only, what `headless` does), Gazebo renders
+  the Jackal's `gpu_lidar` with OpenGL, and the costmaps need that scan. That's part of the server's ~2.2 cores, together
+  with physics and the HuNav plugin.
+* **Cheap trims that are left** (not done, documented for later): the ROS↔Gazebo bridge also converts every scan into a
+  `lidar/points` `PointCloud2` that nothing in our Nav2 setup reads (`simulation-setup/entities/robots/jackal/mappings.yaml`);
+  `parameter_bridge` uses only ~0.06 core, so it's not worth patching. The rest is Nav2 (bt_navigator, planner,
+  controller, smoother, behaviors: ~0.2 core each) and the task generator (~0.4 core).
+* ⚠️ **Orphaned planner processes were the biggest waste we found.** nav2py starts the policy as
+  `nav2py_run` → `<venv>/bin/python -m nav2py_<name>`, and the python child survived `ros2 launch` shutdown. Five old
+  DS-RNN servers (up to 8 h old) were each spinning at ~80% CPU, i.e. **~4 cores**, which pulled the RTF down to 0.67.
+  `arena-stop.sh` now kills them too. If a run looks slow, check `pgrep -af "python -m nav2py_"` first.
 
 **Everything already runs on simulated time.** Every node uses `/clock`, and episode timeouts are in sim seconds.
 Speed is decided by Gazebo alone:
