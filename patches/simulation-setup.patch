@@ -100,6 +100,222 @@ index 14f55768..6e68315a 100644
  collision_monitor:
    ros__parameters:
      base_frame_id: ${frame:-}${robot_base_frame:-base_link}
+diff --git a/entities/obstacles/static/panel_x05/sdf/panel_x05.sdf b/entities/obstacles/static/panel_x05/sdf/panel_x05.sdf
+new file mode 100644
+index 00000000..63961222
+--- /dev/null
++++ b/entities/obstacles/static/panel_x05/sdf/panel_x05.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     0.5 m long along x, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_x05">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>0.5 0.2 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>0.5 0.2 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_x1/sdf/panel_x1.sdf b/entities/obstacles/static/panel_x1/sdf/panel_x1.sdf
+new file mode 100644
+index 00000000..5d3a3ff4
+--- /dev/null
++++ b/entities/obstacles/static/panel_x1/sdf/panel_x1.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     1 m long along x, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_x1">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>1 0.2 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>1 0.2 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_x2/sdf/panel_x2.sdf b/entities/obstacles/static/panel_x2/sdf/panel_x2.sdf
+new file mode 100644
+index 00000000..6cc9a046
+--- /dev/null
++++ b/entities/obstacles/static/panel_x2/sdf/panel_x2.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     2 m long along x, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_x2">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>2 0.2 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>2 0.2 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_x4/sdf/panel_x4.sdf b/entities/obstacles/static/panel_x4/sdf/panel_x4.sdf
+new file mode 100644
+index 00000000..043bbcea
+--- /dev/null
++++ b/entities/obstacles/static/panel_x4/sdf/panel_x4.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     4 m long along x, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_x4">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>4 0.2 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>4 0.2 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_y05/sdf/panel_y05.sdf b/entities/obstacles/static/panel_y05/sdf/panel_y05.sdf
+new file mode 100644
+index 00000000..4244ac77
+--- /dev/null
++++ b/entities/obstacles/static/panel_y05/sdf/panel_y05.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     0.5 m long along y, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_y05">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>0.2 0.5 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>0.2 0.5 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_y1/sdf/panel_y1.sdf b/entities/obstacles/static/panel_y1/sdf/panel_y1.sdf
+new file mode 100644
+index 00000000..04a008e5
+--- /dev/null
++++ b/entities/obstacles/static/panel_y1/sdf/panel_y1.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     1 m long along y, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_y1">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>0.2 1 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>0.2 1 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_y2/sdf/panel_y2.sdf b/entities/obstacles/static/panel_y2/sdf/panel_y2.sdf
+new file mode 100644
+index 00000000..5209d41e
+--- /dev/null
++++ b/entities/obstacles/static/panel_y2/sdf/panel_y2.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     2 m long along y, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_y2">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>0.2 2 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>0.2 2 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
+diff --git a/entities/obstacles/static/panel_y4/sdf/panel_y4.sdf b/entities/obstacles/static/panel_y4/sdf/panel_y4.sdf
+new file mode 100644
+index 00000000..433feae1
+--- /dev/null
++++ b/entities/obstacles/static/panel_y4/sdf/panel_y4.sdf
+@@ -0,0 +1,21 @@
++<?xml version="1.0"?>
++<!-- initial-arena-testing: thin static wall panel for scenario-defined geometry (campus world, "option 3").
++     4 m long along y, 0.2 m thick, 2.0 m tall; origin = footprint centre on the floor. Place with yaw 0:
++     the HuNav plugin uses the UNROTATED box size, so rotating a panel creates a phantom obstacle zone. Use the
++     panel_x* / panel_y* variant instead of a yaw. The visual is named arena_wall_visual so the HuNav plugin
++     ignores it (it is in <ignore_models>); pedestrians avoid the collision box, the lidar sees the visual. -->
++<sdf version="1.9">
++  <model name="panel_y4">
++    <static>true</static>
++    <link name="link">
++      <pose>0 0 1.0 0 0 0</pose>
++      <collision name="panel_collision">
++        <geometry><box><size>0.2 4 2.0</size></box></geometry>
++      </collision>
++      <visual name="arena_wall_visual">
++        <geometry><box><size>0.2 4 2.0</size></box></geometry>
++        <material><ambient>0.6 0.6 0.65 1</ambient><diffuse>0.6 0.6 0.65 1</diffuse></material>
++      </visual>
++    </link>
++  </model>
++</sdf>
 diff --git a/entities/robots/jackal/mappings.yaml b/entities/robots/jackal/mappings.yaml
 index 6b4e42fb..e6eb0bf4 100644
 --- a/entities/robots/jackal/mappings.yaml
