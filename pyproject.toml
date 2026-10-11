@@ -5,8 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "imageio-ffmpeg>=0.6.0",
+    "ipykernel>=7.3.0",
+    "jupyterlab>=4.6.4",
     "matplotlib>=3.10.9",
     "numpy>=2.2.6",
+    "pandas>=2.3.3",
     "pillow>=12.3.0",
     "pyyaml>=6.0.3",
     "shapely>=2.1.2",
@@ -18,3 +22,7 @@ initial-arena-testing = "initial_arena_testing:main"
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Two importable packages live in src/: the (empty) project package and the episode analysis package (docs/12).
+module-name = ["initial_arena_testing", "arena_analysis"]
