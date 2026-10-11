@@ -184,7 +184,7 @@ Policy: 0.89 success (= authors). Adapter with ±30 m offsets: 0.89; without rec
 overwrite it ("A virtual environment already exists"). Build with:
 `UV_VENV_CLEAR=1 colcon build --symlink-install --packages-select nav2py_dsrnn_controller`.
 
-**First Arena run (hallway_tame, 2026-10-11):** episode 1 reached the goal (1, 6) → (59, 6) in ~140 s through
+**First Arena run (hallway_tame, 2026-10-11):** episode 1 drove from (1, 6) to the goal at (59, 6) in ~140 s through
 20 pedestrians (DWB: ~296 s, but capped at 0.26 m/s). Known issues:
 - Nav2's `velocity_smoother` runs with defaults (max 0.5 m/s, 2.5 rad/s): DS-RNN commands 1.0 m/s, robot gets 0.5.
 - The policy steers bang-bang (w = ±1 rad/s, ±0.3 rad weave) even with nobody around.
