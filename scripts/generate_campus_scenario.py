@@ -282,11 +282,14 @@ def door_exit(campus, b, p):
     Robot: the riser at y = 24.5 (6 m below the door) -> plaza_center (34, 41), i.e. up and through the door.
     Crowd, p["wave"] = true (standalone): p["n_exiting"] people start at homes spread over the southern plaza
     (1.8-11 m from the door) and all head for the door at t = 0: down through the door (waypoints above, in, and
-    below the door, so nobody catches on the frame), down the riser past the robot, into the intersection, and
-    out along the crossing corridor to a destination 4-18 m east or west, where they stop (cyclic_goals false).
-    The exit wave fills the door for ~10-30 s: DS-RNN (1 m/s) meets it in the door, DWB (0.26 m/s, ~23 s to
-    the door) meets its tail plus everyone walking down the riser at it. Nobody walks back, because head-on
-    traffic in a single-file door makes HuNav people walk through each other (they cannot take turns).
+    below the door, so nobody catches on the frame), down the riser past the robot, through the intersection and
+    out along the crossing corridor to a spot 4-18 m east or west, where they mill around (10 points within 2 m,
+    ~20 m of walking), then walk back up through the door to their home. The exit wave fills the door for
+    ~10-30 s: DS-RNN (1 m/s) meets it in the door, DWB (0.26 m/s, ~23 s to the door) meets its tail plus everyone
+    walking down the riser at it. The return wave reaches the door after ~45 s and goes the robot's way. Exits and
+    returns are separated in time on purpose: head-on traffic in a single-file door makes HuNav people walk
+    through each other (they cannot take turns). (cyclic_goals false, i.e. stopping at the destination, crashes
+    the HuNav Gazebo plugin once an agent has reached its last goal, so everyone loops.)
     Crowd, p["wave"] = false (gauntlet): everyone loops plaza home -> door -> riser below the door -> door ->
     home, at random phases, so the door has two-way traffic whenever the robot arrives. This needs two lanes
     (door_width >= 1.7 m: lanes w - 1.0 >= 0.7 m apart, out on the -x side, in on the +x side).
@@ -340,8 +343,14 @@ def door_exit(campus, b, p):
         xo = x_out + b.rng.uniform(-jit, jit)
         out_leg = [(xo, y_above), (xo, dcy), (xo, y_below)]
         if wave:
-            mid = (b.rng.uniform(rx0 + 1.0, rx1 - 1.0), b.rng.uniform(zy0 + 1.5, zy1 - 1.5))   # in the intersection
-            b.add_pedestrian("exiting", h, out_leg + [mid, dest()], speed, hunav={"cyclic_goals": False})
+            def mid():                                                                   # in the intersection
+                return (b.rng.uniform(rx0 + 1.0, rx1 - 1.0), b.rng.uniform(zy0 + 1.5, zy1 - 1.5))
+            d = dest()
+            mill = [(min(max(d[0] + b.rng.uniform(-2, 2), zx0 + 1.0), zx1 - 1.0),
+                     b.rng.uniform(zy0 + 0.8, zy1 - 0.8)) for _ in range(10)]
+            xi = x_in + b.rng.uniform(-jit, jit)
+            back = [mid(), (xi, y_below), (xi, dcy), (xi, y_above), h]
+            b.add_pedestrian("exiting", h, out_leg + [mid(), d] + mill + back, speed)
         else:
             s1 = sink()
             s2 = next(q for q in (sink() for _ in range(100)) if math.dist(q, s1) > 1.0)
@@ -580,6 +589,8 @@ def check_scenario(scenario, campus):
         if not robot_ok.contains(Point(scenario["robots"][0][k][:2])):
             problems.append(f"robot {k} {scenario['robots'][0][k][:2]} too close to a wall/panel")
     for a in scenario["obstacles"]["dynamic"]:
+        if not a.get("cyclic_goals", True):
+            problems.append(f"{a['name']}: cyclic_goals false crashes the HuNav Gazebo plugin at the last goal")
         bad = [k for k, v in a.get("behavior", {}).items() if k.endswith("_factor") and not isinstance(v, float)]
         if bad or not isinstance(a.get("desired_velocity"), float):
             problems.append(f"{a['name']}: non-float {bad or 'desired_velocity'} (Arena drops such agents)")

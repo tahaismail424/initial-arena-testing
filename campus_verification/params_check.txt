@@ -1,0 +1,35 @@
+
+== corridor_counterflow (30 seeds): min / max of every column
+     width  n_oncoming  n_with  corridor_width_meas  door_width_meas  riser_width_meas  n_with_robot  n_total  n_panels  v_min  v_max  start_shift  deterministic
+min   2.20         6.0     0.0                 2.20              5.0               5.0           1.0        6        24   0.90   1.28         0.55           True
+max   3.94        12.0     4.0                 3.94              5.0               5.0           4.0       16        24   1.09   1.50         1.52           True
+
+== door_exit (30 seeds): min / max of every column
+     corridor_width_meas  door_width_meas  riser_width_meas  n_total  n_panels  v_min  v_max  start_shift  deterministic  door_width  door_offset  n_exiting  n_waiting
+min                  5.0             1.23               5.0       10        12    0.5   1.22         1.22           True        1.23        -0.97       10.0        0.0
+max                  5.0             2.19               5.0       23        12    0.9   1.40         3.06           True        2.20         0.83       20.0        3.0
+
+== blind_corner (30 seeds): min / max of every column
+     corridor_width_meas  door_width_meas  riser_width_meas  n_total  n_panels  v_min  v_max  start_shift  deterministic    n  riser_width  n_corner
+min                  5.0              5.0              3.05        3         0   1.00   1.25         1.32           True  3.0         3.05       3.0
+max                  5.0              5.0              5.00        8        10   1.67   1.99         3.96           True  8.0         4.99       8.0
+
+== intersection (30 seeds): min / max of every column
+     corridor_width_meas  door_width_meas  riser_width_meas  n_total  n_panels  v_min  v_max  start_shift  deterministic  n_east  n_west  group_frac  n_westbound_group  n_eastbound_group  n_eastbound  n_westbound
+min                  5.0              5.0               5.0        8         0   0.90   1.27         1.17           True     4.0     4.0        0.02                2.0                2.0          1.0          1.0
+max                  5.0              5.0               5.0       18         0   1.05   1.50         3.23           True    10.0    10.0        0.48                7.0                7.0         10.0         10.0
+
+== plaza_dense (30 seeds): min / max of every column
+     corridor_width_meas  door_width_meas  riser_width_meas  n_total  n_panels  v_min  v_max  start_shift  deterministic     n  band  frac_impassive  frac_standing  n_milling  n_standing
+min                  5.0              5.0               5.0       15         0   0.50   1.15         0.72           True  15.0  3.08             0.0           0.00       13.0         1.0
+max                  5.0              5.0               5.0       35         0   0.54   1.30         1.51           True  35.0  4.96             0.3           0.15       35.0         5.0
+
+== gauntlet (30 seeds): min / max of every column
+     n_oncoming  corridor_width_meas  door_width_meas  riser_width_meas  n_with_robot  n_total  n_panels  v_min  v_max  start_shift  deterministic  n_exiting  n_waiting  n_corner  n_westbound_group  n_eastbound_group  n_eastbound  n_westbound  n_milling  n_standing  corridor_counterflow.width  corridor_counterflow.n_oncoming  corridor_counterflow.n_with  blind_corner.n  blind_corner.riser_width  intersection.n_east  intersection.n_west  intersection.group_frac  door_exit.door_width  door_exit.door_offset  door_exit.n_exiting  door_exit.n_waiting  plaza_dense.n  plaza_dense.band  plaza_dense.frac_impassive  plaza_dense.frac_standing
+min         4.0                 2.27             1.73               3.0           1.0       37        34   0.50   1.46         1.30           True        6.0        1.0       3.0                2.0                2.0          1.0          1.0       10.0         1.0                        2.27                              4.0                          0.0             3.0                      3.00                  3.0                  3.0                     0.01                  1.73                  -0.95                  6.0                  0.0           12.0              3.00                        0.01                       0.00
+max         8.0                 3.98             2.37               5.0           2.0       52        46   0.57   1.79         2.29           True       10.0        2.0       6.0                5.0                5.0          6.0          6.0       20.0         3.0                        3.98                              8.0                          2.0             6.0                      4.94                  6.0                  6.0                     0.38                  2.37                   0.99                 10.0                  2.0           20.0              4.96                        0.29                       0.15
+
+corridor width: |measured - width| max 0.001 m
+door width:     |measured - door_width| max 0.001 m
+riser width:    |measured - riser_width (5 if >= 4.5)| max 0.000 m
+deterministic (same seed -> identical JSON): True
