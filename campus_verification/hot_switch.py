@@ -73,6 +73,15 @@ def set_scenario(name):
     return set_param(f"switch -> {name}", f"{{name: task.scenario.file, value: {{type: 4, string_value: {name}}}}}")
 
 
+def reset_now():
+    cmd = ROS + "timeout 25 ros2 service call /task_generator_node/reset_task std_srvs/srv/Empty '{}'"
+    try:
+        subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=40)
+        log("reset_task called (priming episode cut short)")
+    except subprocess.TimeoutExpired:
+        log("reset_task timed out")
+
+
 def set_timeout(seconds):
     return set_param(f"episode timeout -> {seconds} s",
                      f"{{name: timeout, value: {{type: 2, integer_value: {int(seconds)}}}}}")
@@ -89,6 +98,10 @@ def main():
     ap.add_argument("--args", nargs="*", default=[], help="extra launch args")
     ap.add_argument("--timeout", type=int, help="episode timeout (sim s) instead of task_generator.yaml's 600")
     ap.add_argument("--no-warmup", action="store_true", help="launch directly with the first scenario")
+    ap.add_argument("--prime", action="store_true",
+                    help="cut each scenario's first episode short (reset_task) and record the next one: some resets "
+                         "throw pedestrians metres along/through walls (HuNav wall-clock integration), the reset "
+                         "into the SAME scenario again is clean")
     ap.add_argument("--attempts", type=int, default=3, help="relaunches after a crash (Gazebo segfaults happen)")
     a = ap.parse_args()
 
@@ -115,7 +128,8 @@ def run_launch(a, out, todo, need, t0):
     episode that ends with a real outcome. Returns True if the launch died (e.g. Gazebo segfault)."""
     logf = out / "logs" / f"{time.strftime('%Y%m%d-%H%M%S')}_{a.planner}.log"
     queue = ([] if a.no_warmup else ["warmup.json"]) + todo
-    wanted = {sc: need.get(sc, 1) for sc in queue}
+    wanted = {sc: need.get(sc, 1) + (1 if a.prime else 0) for sc in queue}
+    primed = set()
     if not a.no_warmup:
         wanted["warmup.json"] = 1
     started, ep_scen = {}, {}
@@ -140,6 +154,10 @@ def run_launch(a, out, todo, need, t0):
                     scen = m.group(3)
                     ep_scen[m.group(2)] = scen
                     started[scen] = started.get(scen, 0) + 1
+                    prime_now = a.prime and scen != "warmup.json" and scen not in primed
+                    if prime_now:
+                        primed.add(scen)
+                        ep_scen[m.group(2)] = None          # don't count it
                     log(f"episode {m.group(2)} started: {scen} ({started[scen]}/{wanted.get(scen)})")
                     if scen == queue[cur] and started[scen] >= wanted[scen]:
                         if cur + 1 < len(queue):
@@ -149,6 +167,9 @@ def run_launch(a, out, todo, need, t0):
                             pending_last = m.group(2)
                     if a.timeout and not timeout_set:
                         timeout_set = set_timeout(a.timeout)
+                    if prime_now:
+                        time.sleep(2)
+                        reset_now()
                 else:
                     log(f"episode {m.group(4)} ended: {m.group(5)} after {m.group(6)} s")
                     sc = ep_scen.get(m.group(4))

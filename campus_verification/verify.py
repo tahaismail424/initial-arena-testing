@@ -266,6 +266,16 @@ def episode_row(ep, cmp):
     row["obstacle_contact_s"] = float((clear < 0).sum() * 0.1)
     fr = social_metrics.freezes(ep)
     row["freeze_time"] = float(fr["duration"].sum()) if len(fr) else 0.0
+    # reset artifact: how far beyond a normal walk anyone got in the first second (HuNav integrates the reset's
+    # wall-clock pause; docs/14). > 1.5 m = pedestrians were thrown, possibly through walls: episode suspect.
+    hh = ep.humans
+    jump = 0.0
+    starts = {x["name"]: (x["pos"][:2], x["desired_velocity"]) for x in scen["obstacles"]["dynamic"]}
+    for n, g in hh[hh["t_rel"] <= 1.0].groupby("name"):
+        if n in starts:
+            (sx, sy), v = starts[n]
+            jump = max(jump, float(np.hypot(g["x"] - sx, g["y"] - sy).max()) - v * 1.0)
+    row["reset_jump"] = jump
     hc, h = human_checks(ep, scen, cmp)
     row.update(hc)
     if not h.empty:
@@ -294,8 +304,9 @@ def main():
         run = load_run(run_dir)
         eps = list(run.episodes)
         for k, ep in enumerate(eps):
-            if ep.outcome == "incomplete":
-                continue
+            if ep.outcome == "incomplete" or ep.meta.get("scenario") == "warmup.json" or \
+                    (ep.outcome == "reset" and (ep.meta.get("duration") or 0) < 15):
+                continue        # cut short (sim stopped / hot_switch --prime) or the warm-up drive
             try:
                 row = episode_row(ep, cmp)
                 # real-time factor: sim time / wall time between this episode's start and the next one's
@@ -313,7 +324,7 @@ def main():
     with pd.option_context("display.max_columns", None, "display.width", 250, "display.max_colwidth", 80):
         cols = [c for c in ["scenario", "planner", "episode", "outcome", "duration", "collisions", "min_clearance",
                             "min_obstacle_clear", "freeze_time", "h_inside", "h_max_pen", "pp_events", "pp_frac", "pp_long", "pp_min",
-                            "stuck", "stuck_by_robot", "speed_ratio", "rtf"] if c in df]
+                            "stuck", "stuck_by_robot", "speed_ratio", "rtf", "reset_jump"] if c in df]
         print(df[cols].round(2).to_string(index=False))
     return df
 
