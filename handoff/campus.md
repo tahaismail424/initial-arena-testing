@@ -18,29 +18,27 @@ Last update: 2026-10-11 22:30 UTC
 - `campus_verification/verify.py` (per-episode checks a/b/c), `hot_switch.py` (several scenarios per launch,
   same lock; --timeout, warmup), `reset_jump.py`.
 
-## In progress
-- Pilot DS-RNN run (campus_verification/data/pilot_dsrnn, gitignored): corridor_counterflow_s0 and door_exit_s0
-  -> DS-RNN pinned on panels (policy) and sat until timeout; blind_corner_s0 success 31.8 s; intersection_s0 ran
-  > 7 min (not yet analysed).
-- Findings to act on: (1) first reset after launch: pedestrians jump 5-8.5 m (later resets ~0.6 m) -> warmup
-  scenario; (2) pedestrian-pedestrian overlap frequent in dense flows (door: 87% of samples have a pair < 0.4 m)
-  -> investigating (social_force_factor / density).
-
-- Gotcha found: integer force factors (e.g. 12) in a scenario make Arena DROP the agent ("must be of type
-  'float'"); Builder now coerces, check_scenario rejects non-floats.
-- Force tuning (pedestrian overlap): variants worlds/campus/scenarios/tune_*_sf12/sf20.json (temporary, not
-  committed) running in campus_verification/data/tune_forces2 (hot_switch.py, DWB, timeout 70 s).
-  Baseline sf5/of10: overlap (<0.4 m) share of pedestrian-time 23-24% door/corridor, 3% intersection, 9% plaza.
-- Infra test files (ilt_*, spike_*) removed from repo + Arena links (coordinator OK'd).
-- Scheduler: arena_batch.py (infra, multi-scenario) has no episode-timeout / warmup option; hot_switch.py kept for
-  --timeout + warmup.json.
+## In progress (2026-10-11 23:00 UTC)
+- Commits so far: be1951f (WIP templates), 7c412da (float fields), 6c3c0b1 (door exit-once wave, lanes, forces
+  20/30), + hot_switch crash-relaunch (this commit).
+- RUNNING: DS-RNN template matrix, seeds 0-2 x 5 templates, 1 ep each, timeout 150 s:
+  `uv run campus_verification/hot_switch.py --planner dsrnn --episodes 1 --timeout 150 --max-minutes 90
+  --out campus_verification/data/matrix_dsrnn <15 scenario files>` (log campus_verification/data/matrix_dsrnn.out).
+  To resume: rerun with the scenarios whose episodes are missing (verify.py lists what exists).
+- Findings: (a) HuNav integrates on WALL time -> pedestrian sim-time speed = desired / RTF (plaza 27 people,
+  RTF 0.71 -> 1.37x); first reset after launch -> 5-8.5 m jump (warmup.json avoids it); int force factors drop
+  agents. Notes for infra: scratchpad campus_issues_for_infra.md (copy into the final report).
+  Ped overlap: head-on on the SAME line (single-file door, same corridor lane) is what makes HuNav people walk
+  through each other -> door_exit is now one-way (exit wave, people leave along the crossing corridor and stop),
+  two-way door loops only for doors >= 1.7 m (gauntlet), corridor lanes always 0.6 m apart, forces 20/30.
+  DS-RNN pins itself on walls/panel corners near people (policy) -> sometimes Gazebo segfaults (hot_switch
+  relaunches).
+- Infra test files (ilt_*, spike_*) removed (also dangling links in ~/arena_ws build/ and install/).
 
 ## Next
-- Fix ped overlap, re-pilot; then the run matrix: 5 templates x 3 seeds x {dwb, dsrnn} (1-2 eps) + gauntlet x 2
-  seeds x {dwb, dsrnn}. Use hot_switch.py (or arena_batch.py once infra adds scenarios globs), timeout 240 s for
-  templates, 900 s for DWB gauntlet.
-- docs/14 rewrite (not §9/§11), figures docs/img/campus_*.
-- Spike files worlds/school_hallway/scenarios/spike_*.json: infra agent still has ilt_* there; leave until confirmed.
+- DWB template matrix (timeout 300), gauntlet s0,s1 x {dwb (timeout 900), dsrnn (timeout 300)}.
+- Analysis per criterion a/b/c (verify.py + manifest), figures docs/img/campus_*, docs/14 rewrite (not §9/§11).
 
 ## Sims / locks
-- None held by the campus agent right now.
+- hot_switch.py holds /tmp/arena-sim.lock while running; if the session died: bash scripts/arena-stop.sh;
+  rm -rf /tmp/arena-sim.lock.

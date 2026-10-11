@@ -51,20 +51,31 @@ def release_lock():
     subprocess.run(["rm", "-rf", str(LOCK)])
 
 
+def set_param(desc, value_yaml, tries=4):
+    """SetParameters on the task generator (ros2 param set hangs against it). It can be slow or unresponsive during
+    a reset, so each try is bounded and retried."""
+    cmd = (ROS + "timeout 25 ros2 service call /task_generator_node/set_parameters "
+           f"rcl_interfaces/srv/SetParameters \"{{parameters: [{value_yaml}]}}\"")
+    for k in range(tries):
+        try:
+            r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=40)
+            if "successful=True" in r.stdout:
+                log(f"{desc}: ok")
+                return True
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(2)
+    log(f"{desc}: FAILED after {tries} tries")
+    return False
+
+
 def set_scenario(name):
-    cmd = (ROS + "ros2 service call /task_generator_node/set_parameters rcl_interfaces/srv/SetParameters "
-           f"\"{{parameters: [{{name: task.scenario.file, value: {{type: 4, string_value: {name}}}}}]}}\"")
-    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=60)
-    ok = "successful=True" in r.stdout
-    log(f"switch -> {name}: {'ok' if ok else 'FAILED ' + r.stdout[-200:] + r.stderr[-200:]}")
-    return ok
+    return set_param(f"switch -> {name}", f"{{name: task.scenario.file, value: {{type: 4, string_value: {name}}}}}")
 
 
 def set_timeout(seconds):
-    cmd = (ROS + "ros2 service call /task_generator_node/set_parameters rcl_interfaces/srv/SetParameters "
-           f"\"{{parameters: [{{name: timeout, value: {{type: 2, integer_value: {int(seconds)}}}}}]}}\"")
-    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=60)
-    log(f"episode timeout -> {seconds} s: {'ok' if 'successful=True' in r.stdout else 'FAILED ' + r.stdout[-200:]}")
+    return set_param(f"episode timeout -> {seconds} s",
+                     f"{{name: timeout, value: {{type: 2, integer_value: {int(seconds)}}}}}")
 
 
 def main():
@@ -78,16 +89,38 @@ def main():
     ap.add_argument("--args", nargs="*", default=[], help="extra launch args")
     ap.add_argument("--timeout", type=int, help="episode timeout (sim s) instead of task_generator.yaml's 600")
     ap.add_argument("--no-warmup", action="store_true", help="launch directly with the first scenario")
+    ap.add_argument("--attempts", type=int, default=3, help="relaunches after a crash (Gazebo segfaults happen)")
     a = ap.parse_args()
 
     out = Path(a.out).expanduser().resolve()
     (out / "logs").mkdir(parents=True, exist_ok=True)
-    logf = out / "logs" / f"{time.strftime('%Y%m%d-%H%M%S')}_{a.planner}.log"
-    queue = ([] if a.no_warmup else ["warmup.json"]) + list(a.scenarios)
-    started = {s: 0 for s in queue}
-    wanted = {s: (1 if s == "warmup.json" and not a.no_warmup else a.episodes) for s in queue}
-    acquire_lock(f"campus-agent hot_switch {a.planner}")
+    need = {sc: a.episodes for sc in a.scenarios}          # episodes still wanted per scenario
     t0 = time.time()
+    for attempt in range(1, a.attempts + 1):
+        todo = [sc for sc in a.scenarios if need[sc] > 0]
+        if not todo or time.time() - t0 > a.max_minutes * 60:
+            break
+        crashed = run_launch(a, out, todo, need, t0)
+        if not crashed:
+            break
+        log(f"launch {attempt} crashed; relaunching for the rest" if attempt < a.attempts else "giving up")
+    left = [f"{sc} x{need[sc]}" for sc in a.scenarios if need[sc] > 0]
+    if left:
+        print("NOT RUN:", " ".join(left))
+    return 0
+
+
+def run_launch(a, out, todo, need, t0):
+    """One launch: warmup, then every scenario in `todo` for need[sc] episodes. Decrements `need` for every
+    episode that ends with a real outcome. Returns True if the launch died (e.g. Gazebo segfault)."""
+    logf = out / "logs" / f"{time.strftime('%Y%m%d-%H%M%S')}_{a.planner}.log"
+    queue = ([] if a.no_warmup else ["warmup.json"]) + todo
+    wanted = {sc: need.get(sc, 1) for sc in queue}
+    if not a.no_warmup:
+        wanted["warmup.json"] = 1
+    started, ep_scen = {}, {}
+    acquire_lock(f"campus-agent hot_switch {a.planner}")
+    crashed = False
     try:
         with open(logf, "w") as lf:
             proc = subprocess.Popen(["bash", str(LAUNCH), "--headless", f"--record={out}", "campus", "scenario",
@@ -95,7 +128,7 @@ def main():
                                     stdout=lf, stderr=subprocess.STDOUT, cwd=Path.home() / "arena_ws")
         log(f"launched {a.planner} with {queue[0]} (log {logf})")
         pos, cur, last_event, done = 0, 0, time.time(), False
-        pending_last = None
+        pending_last, timeout_set = None, False
         while True:
             time.sleep(3)
             text = logf.read_text(errors="replace")
@@ -105,39 +138,42 @@ def main():
                 last_event = time.time()
                 if m.group(3):
                     scen = m.group(3)
+                    ep_scen[m.group(2)] = scen
                     started[scen] = started.get(scen, 0) + 1
                     log(f"episode {m.group(2)} started: {scen} ({started[scen]}/{wanted.get(scen)})")
-                    if a.timeout and m.group(2) == "0":
-                        set_timeout(a.timeout)
                     if scen == queue[cur] and started[scen] >= wanted[scen]:
                         if cur + 1 < len(queue):
                             cur += 1
                             set_scenario(queue[cur])
                         else:
                             pending_last = m.group(2)
+                    if a.timeout and not timeout_set:
+                        timeout_set = set_timeout(a.timeout)
                 else:
                     log(f"episode {m.group(4)} ended: {m.group(5)} after {m.group(6)} s")
+                    sc = ep_scen.get(m.group(4))
+                    if m.group(5) != "incomplete" and sc in need:
+                        need[sc] = max(0, need[sc] - 1)
                     if pending_last is not None and m.group(4) == pending_last:
                         done = True
             if done:
-                log("all scenarios done")
+                log("all scenarios of this launch done")
                 break
             if proc.poll() is not None:
                 log("launch exited unexpectedly")
+                crashed = True
                 break
             if time.time() - t0 > a.max_minutes * 60:
-                log(f"time budget reached; not run: {queue[cur + 1:]}")
+                log("time budget reached")
                 break
             if time.time() - last_event > a.stall_minutes * 60:
                 log("stalled")
+                crashed = True
                 break
     finally:
         release_lock()
-        log(f"stopped, lock released ({(time.time() - t0) / 60:.1f} min)")
-    left = queue[cur + 1:] if not done else []
-    if left:
-        print("NOT RUN:", " ".join(left))
-    return 0
+        log(f"stopped, lock released ({(time.time() - t0) / 60:.1f} min since start)")
+    return crashed
 
 
 if __name__ == "__main__":

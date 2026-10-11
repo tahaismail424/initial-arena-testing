@@ -143,6 +143,8 @@ def human_checks(ep, scen, cmp):
 
     # stuck pedestrians and speeds
     wps = {a["name"]: np.array([w[:2] for w in a["waypoints"]]) for a in scen["obstacles"]["dynamic"]}
+    final = {a["name"]: np.array(a["waypoints"][-1][:2]) for a in scen["obstacles"]["dynamic"]
+             if not a.get("cyclic_goals", True)}           # one-way walkers stop at their last waypoint
     desired = {a["name"]: a["desired_velocity"] for a in scen["obstacles"]["dynamic"]}
     r = ep.robot[["t", "x", "y"]].rename(columns={"x": "rx", "y": "ry"})
     stuck, ratios, speeds = [], [], []
@@ -170,6 +172,8 @@ def human_checks(ep, scen, cmp):
             if dur < STUCK_MIN:
                 continue
             x, y = xx[idx].mean(), yy[idx].mean()
+            if name in final and math.dist(final[name], (x, y)) < 1.0:
+                continue                                  # arrived at its destination: standing is intended
             near_wp = name in wps and np.min(np.hypot(*(wps[name] - [x, y]).T)) < 1.0
             near_robot = float(np.min(np.hypot(gm["x"].iloc[idx] - gm["rx"].iloc[idx],
                                                gm["y"].iloc[idx] - gm["ry"].iloc[idx]))) < 1.2
@@ -288,11 +292,18 @@ def main():
     rows = []
     for run_dir in find_runs(args.paths):
         run = load_run(run_dir)
-        for ep in run.episodes:
+        eps = list(run.episodes)
+        for k, ep in enumerate(eps):
             if ep.outcome == "incomplete":
                 continue
             try:
-                rows.append(episode_row(ep, cmp))
+                row = episode_row(ep, cmp)
+                # real-time factor: sim time / wall time between this episode's start and the next one's
+                if k + 1 < len(eps):
+                    nxt = eps[k + 1].meta
+                    wall = (pd.Timestamp(nxt["wall_start"]) - pd.Timestamp(ep.meta["wall_start"])).total_seconds()
+                    row["rtf"] = (nxt["t_start"] - ep.meta["t_start"]) / wall if wall > 0 else np.nan
+                rows.append(row)
             except Exception as e:      # keep going; report the broken episode
                 rows.append({"run": run_dir.name, "episode": ep.index, "error": repr(e)})
                 print(f"{run_dir.name}/{ep.index}: {e!r}", file=sys.stderr)
@@ -302,7 +313,7 @@ def main():
     with pd.option_context("display.max_columns", None, "display.width", 250, "display.max_colwidth", 80):
         cols = [c for c in ["scenario", "planner", "episode", "outcome", "duration", "collisions", "min_clearance",
                             "min_obstacle_clear", "freeze_time", "h_inside", "h_max_pen", "pp_events", "pp_frac", "pp_long", "pp_min",
-                            "stuck", "stuck_by_robot", "speed_ratio"] if c in df]
+                            "stuck", "stuck_by_robot", "speed_ratio", "rtf"] if c in df]
         print(df[cols].round(2).to_string(index=False))
     return df
 
