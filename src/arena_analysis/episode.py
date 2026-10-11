@@ -157,7 +157,7 @@ class Episode:
 
     # ------------------------------------------------------------------ playback (see playback.py)
     def plot(self, t: float | None = None, ax=None, **style):
-        """Draw one top-down frame at sim time t (default: the last sample). Returns the matplotlib Axes."""
+        """Draw one top-down frame t seconds after the episode start (default: the last sample). Returns the Axes."""
         from arena_analysis.playback import plot_frame
         return plot_frame(self, t, ax=ax, **style)
 

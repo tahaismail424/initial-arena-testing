@@ -54,7 +54,7 @@ def main():
         out.mkdir(parents=True, exist_ok=True)
         t0 = ep.meta.get("t_start", 0.0)
         for t_rel in args.frames:
-            ax = ep.plot(t0 + t_rel, **style)
+            ax = ep.plot(t_rel, **style)
             f = out / f"{path.parent.name}_{path.name}_t{t_rel:06.1f}.png"
             ax.figure.tight_layout()
             ax.figure.savefig(f, dpi=100)

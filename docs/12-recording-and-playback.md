@@ -181,7 +181,7 @@ ep.play()                     # inline video
 | `ep.summary(human_radius=None)` | dict of metrics (below) |
 | `ep.plan_at(t)` | the global plan current at sim time `t` |
 | `ep.world` | `World`: `.walls`, `.map_image`, `.bounds`, `.wall_distance(x, y)` |
-| `ep.plot(t=None, view="full")` | draw one frame (default: last sample), returns the Axes |
+| `ep.plot(t=None, view="full")` | draw one frame `t` seconds after the episode start (same clock as the frame's label; default: last sample), returns the Axes |
 | `ep.animation(speed=4, fps=20, view="full")` | matplotlib `FuncAnimation` |
 | `ep.play(speed=4, fps=20, view="full")` | Jupyter: inline HTML5 video (JS player with slider if no ffmpeg) |
 | `ep.save_video("x.mp4", speed=4, fps=20)` | writes .mp4 (ffmpeg) or .gif; returns the path written |

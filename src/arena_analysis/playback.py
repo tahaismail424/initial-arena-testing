@@ -180,8 +180,11 @@ class Scene:
 
 
 def plot_frame(ep, t: float | None = None, ax=None, **style):
-    """Draw the episode at sim time t (absolute sim seconds, like the `t` column; default: last sample)."""
+    """Draw the episode at t seconds after the episode start (the `t_rel` column and the clock shown in the frame;
+    default: last sample)."""
     scene = Scene(ep, ax=ax, **style)
+    if t is not None and len(scene.robot):
+        t = float(scene.robot["t"].iloc[0]) + t   # relative -> absolute sim time (the `t` column)
     scene.update(scene.index_at(t))
     return scene.ax
 
