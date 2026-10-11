@@ -22,6 +22,7 @@ Arena's upstream docs describe older versions in places. When the docs and the c
 | 9 | [Hallway crowd scenarios](docs/09-hallway-scenarios.md) | Spec → JSON → HuNav: agent classes, what every field does, and the pitfalls we hit |
 | 10 | [Learned planners](docs/10-learned-planners.md) | nav2py install, PaS-CrowdNav bring-up, planner build status, DS-RNN native-sim setup |
 | 11 | [DS-RNN native sim tour](docs/11-dsrnn-native-sim-tour.md) | Visualizing DS-RNN, what code actually runs, observation/action/reward, configurables, porting notes |
+| 12 | [Recording & playback](docs/12-recording-and-playback.md) | Record every episode to CSV (`--record`), file format, `arena_analysis` metrics API, video/notebook replay |
 
 ## Quick start
 
@@ -31,6 +32,8 @@ uv run scripts/generate_hallway.py -n school_hallway --link                  # w
 uv run scripts/generate_scenario.py scenarios/hallway_tame.yaml --link       # crowd
 bash scripts/arena-launch.sh school_hallway scenario scenario:=hallway_tame.json               # watch
 bash scripts/arena-launch.sh --headless school_hallway scenario scenario:=hallway_tame.json    # benchmark (no windows)
+bash scripts/arena-launch.sh --headless --record school_hallway scenario scenario:=hallway_tame.json local_planner:=dsrnn
+uv run scripts/playback.py ~/arena_runs/<run>/episode_000 --save ep0.mp4                      # replay a recorded episode
 ```
 
 Run the launch from a terminal in the VM's graphical desktop. `Ctrl+C` stops everything. After `--link` creates *new*
@@ -45,6 +48,10 @@ files, rebuild once: `cd ~/arena_ws && source arena.bash && colcon build --symli
 | `scripts/generate_hallway.py` | Parametric hallway world generator (map.png / map.yaml / walls.yaml / scenario / preview) |
 | `scripts/generate_scenario.py` | Crowd scenario generator: spec YAML → scenario JSON + preview |
 | `scripts/check_run.py` | Believed-vs-true pose + Nav2 goal status for a running episode |
+| `scripts/arena_recorder.py` | Episode recorder (ROS node): robot, pedestrians, plan, outcome → `~/arena_runs/<run>/episode_NNN/` |
+| `scripts/playback.py` | Replay / summarize a recorded episode (video, PNG frames, metrics) |
+| `src/arena_analysis/` | Analysis package: `load_run`, episode metrics (collisions, clearance, path length), playback |
+| `notebooks/` | `episode_playback.ipynb`: example analysis + replay (`uv run jupyter lab`) |
 | `scripts/check_crowd.py` | Pedestrian health for a running episode: per-class speeds, gaps, stuck agents, RTF |
 | `scenarios/` | Crowd **specs** (e.g. `hallway_tame.yaml`) |
 | `worlds/` | Generated worlds + scenarios (the source of truth; Arena sees them via per-file symlinks) |
