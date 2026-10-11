@@ -35,6 +35,9 @@ These live in the upstream checkouts. A `git pull` / `vcs import` / reinstall co
 | `entities/robots/jackal/urdf/jackal.gazebo` | Added `OdometryPublisher` (true pose on `/model/<robot>/ground_truth/{odometry,tf}`) | Ground-truth localization, [08](08-ground-truth-localization.md) |
 | `entities/robots/jackal/mappings.yaml` | Odometry and TF bridge entries use `{odom_source}` | Switches wheel odometry ↔ ground truth |
 | `configs/nav2/nav2.yaml` | `bt_navigator.default_server_timeout: 200` (was the Nav2 default of 20 ms) | Under load the planner missed the 20 ms window and the goal was aborted for good ([09](09-hallway-scenarios.md#4-pitfalls-we-hit-and-the-fix-in-the-generator)) |
+| `configs/nav2/nav2.yaml` | Added a `velocity_smoother` section: limits = Jackal hardware (2.0 m/s, 4.0 rad/s, 20 m/s², 25 rad/s²) | It was unconfigured, so Nav2's defaults (0.5 m/s, 2.5 rad/s) silently capped every planner. DS-RNN commanded 1.0 m/s and got 0.5. Each controller still enforces its own limits (DWB stays at 0.26 m/s). |
+| same | `goal_checker.yaw_goal_tolerance: 0.25 → 3.1416` | Success = reaching the goal *position* (crowd-nav convention). With 0.25 rad, DS-RNN circled the goal and pinned itself against the end wall (Nav2: "Failed to make progress"). Affects all planners: DWB no longer does a final rotate-in-place. |
+| `configs/nav2/controllers/dsrnn/` | New controller config for `local_planner:=dsrnn` (10 Hz) | [10 §8](10-learned-planners.md#8-ds-rnn-in-arena-nav2py_dsrnn_controller) |
 | `worlds/school_hallway/` (untracked) | Per-file symlinks into this repo's `worlds/school_hallway/` | Created by `scripts/generate_hallway.py --link` |
 
 ### hunav_gz_plugin (`~/arena_ws/src/gazebo/hunav_gz_plugin`, C++, needs `colcon build --packages-select hunav_gz_plugin`)

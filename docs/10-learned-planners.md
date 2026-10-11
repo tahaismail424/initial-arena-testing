@@ -184,8 +184,16 @@ Policy: 0.89 success (= authors). Adapter with ±30 m offsets: 0.89; without rec
 overwrite it ("A virtual environment already exists"). Build with:
 `UV_VENV_CLEAR=1 colcon build --symlink-install --packages-select nav2py_dsrnn_controller`.
 
-**First Arena run (hallway_tame, 2026-10-11):** episode 1 drove from (1, 6) to the goal at (59, 6) in ~140 s through
-20 pedestrians (DWB: ~296 s, but capped at 0.26 m/s). Known issues:
-- Nav2's `velocity_smoother` runs with defaults (max 0.5 m/s, 2.5 rad/s): DS-RNN commands 1.0 m/s, robot gets 0.5.
-- The policy steers bang-bang (w = ±1 rad/s, ±0.3 rad weave) even with nobody around.
-- Episode 2 had no pedestrians (the HuNav reset bug, [09](09-hallway-scenarios.md)).
+**First Arena runs (hallway_tame, 2026-10-11):**
+- With Nav2's default velocity smoother (0.5 m/s cap): episode 1 reached the goal in ~140 s (DWB: ~296 s, but
+  DWB is capped at 0.26 m/s).
+- Smoother raised to Jackal limits: the robot overshot the goal at 1 m/s, circled to fix its heading (goal
+  checker wanted ±0.25 rad) and pinned itself on the end wall → "Failed to make progress".
+- Goal checker now ignores heading: episode 1 reaches the goal in ~65 s; an empty-hallway episode takes ~58 s
+  for 58 m (weaving costs little time).
+
+Known issues:
+- The policy steers bang-bang (w = ±1 rad/s) even with nobody around, so it weaves.
+- Collision monitor deadlock: if a wall gets inside the 0.6 × 0.6 m `StopPolygon`, every command is zeroed,
+  turning away included, so the robot can never leave. DS-RNN gets closer to walls than DWB.
+- Episodes after the first have no pedestrians (the HuNav reset bug, [09](09-hallway-scenarios.md)).
