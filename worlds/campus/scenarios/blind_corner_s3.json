@@ -17,148 +17,148 @@
     "static": [],
     "dynamic": [
       {
+        "name": "corner_timed_0",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          33.03,
+          14.16,
+          0.0
+        ],
+        "waypoints": [
+          [
+            33.03,
+            16.86,
+            0.0
+          ],
+          [
+            31.45,
+            16.86,
+            0.0
+          ],
+          [
+            31.45,
+            3.91,
+            0.0
+          ],
+          [
+            24.65,
+            3.91,
+            0.0
+          ],
+          [
+            24.65,
+            0.98,
+            0.0
+          ],
+          [
+            33.03,
+            0.98,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.84,
+        "group_id": -1,
+        "class": "corner_timed",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "corner_timed_1",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          31.4,
+          7.35,
+          0.0
+        ],
+        "waypoints": [
+          [
+            31.4,
+            4.09,
+            0.0
+          ],
+          [
+            25.05,
+            4.09,
+            0.0
+          ],
+          [
+            25.05,
+            0.99,
+            0.0
+          ],
+          [
+            32.9,
+            0.99,
+            0.0
+          ],
+          [
+            32.9,
+            14.33,
+            0.0
+          ],
+          [
+            31.4,
+            14.33,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.93,
+        "group_id": -1,
+        "class": "corner_timed",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
         "name": "corner_0",
         "model": "actor1",
         "type": 1,
         "pos": [
-          31.53,
-          5.4,
-          0.0
-        ],
-        "waypoints": [
-          [
-            31.53,
-            3.54,
-            0.0
-          ],
-          [
-            25.92,
-            3.54,
-            0.0
-          ],
-          [
-            25.92,
-            1.56,
-            0.0
-          ],
-          [
-            34.05,
-            1.56,
-            0.0
-          ],
-          [
-            34.05,
-            15.45,
-            0.0
-          ],
-          [
-            31.53,
-            15.45,
-            0.0
-          ]
-        ],
-        "desired_velocity": 1.23,
-        "group_id": -1,
-        "class": "corner",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 1,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "corner_1",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          27.83,
-          3.49,
-          0.0
-        ],
-        "waypoints": [
-          [
-            24.71,
-            3.49,
-            0.0
-          ],
-          [
-            24.71,
-            1.49,
-            0.0
-          ],
-          [
-            33.45,
-            1.49,
-            0.0
-          ],
-          [
-            33.45,
-            14.28,
-            0.0
-          ],
-          [
-            32.14,
-            14.28,
-            0.0
-          ],
-          [
-            32.14,
-            3.49,
-            0.0
-          ]
-        ],
-        "desired_velocity": 1.22,
-        "group_id": -1,
-        "class": "corner",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 1,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "corner_2",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          24.91,
-          2.46,
+          28.08,
+          3.66,
           0.0
         ],
         "waypoints": [
           [
             24.91,
-            1.08,
-            0.0
-          ],
-          [
-            33.51,
-            1.08,
-            0.0
-          ],
-          [
-            33.51,
-            15.09,
-            0.0
-          ],
-          [
-            30.79,
-            15.09,
-            0.0
-          ],
-          [
-            30.79,
             3.66,
             0.0
           ],
           [
             24.91,
+            1.08,
+            0.0
+          ],
+          [
+            33.51,
+            1.08,
+            0.0
+          ],
+          [
+            33.51,
+            15.09,
+            0.0
+          ],
+          [
+            30.79,
+            15.09,
+            0.0
+          ],
+          [
+            30.79,
             3.66,
             0.0
           ]
@@ -176,47 +176,100 @@
         }
       },
       {
-        "name": "corner_3",
+        "name": "corner_1",
         "model": "actor1",
         "type": 1,
         "pos": [
-          32.45,
-          15.61,
+          33.03,
+          5.34,
           0.0
         ],
         "waypoints": [
           [
-            30.7,
-            15.61,
+            33.03,
+            14.01,
             0.0
           ],
           [
-            30.7,
-            3.48,
+            31.33,
+            14.01,
             0.0
           ],
           [
-            26.58,
-            3.48,
+            31.33,
+            4.05,
             0.0
           ],
           [
-            26.58,
-            1.41,
+            24.32,
+            4.05,
             0.0
           ],
           [
-            34.02,
-            1.41,
+            24.32,
+            1.23,
             0.0
           ],
           [
-            34.02,
-            15.61,
+            33.03,
+            1.23,
             0.0
           ]
         ],
-        "desired_velocity": 1.18,
+        "desired_velocity": 1.86,
+        "group_id": -1,
+        "class": "corner",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "corner_2",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          32.19,
+          8.04,
+          0.0
+        ],
+        "waypoints": [
+          [
+            32.19,
+            3.63,
+            0.0
+          ],
+          [
+            26.66,
+            3.63,
+            0.0
+          ],
+          [
+            26.66,
+            1.45,
+            0.0
+          ],
+          [
+            33.42,
+            1.45,
+            0.0
+          ],
+          [
+            33.42,
+            16.16,
+            0.0
+          ],
+          [
+            32.19,
+            16.16,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.86,
         "group_id": -1,
         "class": "corner",
         "radius": 0.35,

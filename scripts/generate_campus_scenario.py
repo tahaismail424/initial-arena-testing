@@ -211,6 +211,22 @@ class Builder:
                 return i, t
         raise RuntimeError("couldn't place a pedestrian on its loop (too crowded?)")
 
+    @staticmethod
+    def phase_at(route, s):
+        """(i, t) of the point at arc length s (wrapped) along the closed route, measured from route[0]."""
+        segs = [math.dist(route[k], route[(k + 1) % len(route)]) for k in range(len(route))]
+        s %= sum(segs)
+        for i, L in enumerate(segs):
+            if s <= L:
+                return i, (s / L if L > 0 else 0.0)
+            s -= L
+        return len(route) - 1, 1.0
+
+    @staticmethod
+    def arclength_to(route, k):
+        """Arc length from route[0] to route[k] along the route."""
+        return sum(math.dist(route[j], route[j + 1]) for j in range(k))
+
     def add_on_loop(self, cls, route, speed, group=-1, hunav=None, phase=None):
         """add_pedestrian() at a random phase of the closed route (or at phase=(i, t)). Returns (i, t)."""
         i, t = phase or self.phase_on_loop(route)
@@ -378,8 +394,10 @@ def blind_corner(campus, b, p):
     (1 m from the hidden wall corner, exactly where the robot turns), west along the corridor's north half to
     x 24..27, back east along the south half, up the riser's east side, cross over at the top (y 14..17, >= 2 m
     above the robot's goal). Speeds p["speed"] up to 2 m/s = little reaction time.
-    Timing: start positions are uniform along the loop, so someone comes round the corner every few seconds for
-    the whole episode (loop ~40 m, i.e. one person per ~40 / (n * speed) s).
+    Timing: the first len(p["arrive_at"]) people are "timed": each is placed on its loop so that it reaches the
+    corner at a time drawn from one of the p["arrive_at"] windows (sim s; defaults cover DS-RNN's arrival at
+    ~8-14 s and DWB's at ~35-55 s). The others start uniformly along the loop, so someone comes round the corner
+    every few seconds for the whole episode (loop ~40 m, i.e. one person per ~40 / (n * speed) s).
     """
     rx0, ry0, rx1, ry1 = campus.zone("riser")
     cx0, cy0, cx1, cy1 = campus.zone("corridor")
@@ -393,7 +411,10 @@ def blind_corner(campus, b, p):
     goal_y = campus.anchor("riser_mid")[1]
     b.set_robot(campus.anchor("corridor_mid"), (rx0 + w / 2, goal_y))
 
-    for _ in range(p["n"]):
+    # timed arrivals: these people reach the corner (their turn point) at sampled times, so someone comes round
+    # it while the robot gets there whatever its speed (DS-RNN ~10 s, DWB ~45 s from corridor_mid)
+    arrivals = [b.rng.uniform(*r) for r in p.get("arrive_at", [])][:p["n"]]
+    for k in range(p["n"]):
         speed = b.rng.uniform(*p["speed"])
         x_d = b.rng.uniform(rx0 + 0.7, rx0 + w / 2 - 0.25)        # down lane (west side of the riser)
         x_u = b.rng.uniform(rx0 + w / 2 + 0.25, rx0 + w - 0.7)    # up lane (east side)
@@ -402,7 +423,16 @@ def blind_corner(campus, b, p):
         y_e = b.rng.uniform(cy0 + 0.8, cy0 + 1.6)                 # eastbound lane (south half)
         x_west = b.rng.uniform(24.0, 27.0)
         route = [(x_d, y_top), (x_d, y_w), (x_west, y_w), (x_west, y_e), (x_u, y_e), (x_u, y_top)]
-        b.add_on_loop("corner", route, speed)
+        if k < len(arrivals):
+            # start speed * T before the turn point (route[1]); HuNav people walk at ~their desired speed (docs/14)
+            target = b.arclength_to(route, 1) - speed * arrivals[k]
+            for shift in [0.0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5]:
+                i, t = b.phase_at(route, target + shift)
+                if b.is_clear(b.point_on_loop(route, i, t)):
+                    break
+            b.add_on_loop("corner_timed", route, speed, phase=(i, t))
+        else:
+            b.add_on_loop("corner", route, speed)
 
 
 def intersection(campus, b, p):

@@ -41,7 +41,8 @@ templates:
     wave: true                # everyone walks out at t = 0 and leaves along the crossing corridor (one-way)
 
   blind_corner:               # people come round the corridor -> riser corner
-    n: {int: [3, 8]}
+    n: {int: [4, 8]}
+    arrive_at: {range: [[8, 14], [35, 55]]}   # timed walkers reach the corner in these windows (sim s)
     speed: {range: [1.0, 2.0]}
     riser_width: [3.0, 5.0]   # < 5 narrows the riser above the corner (y 5.5..16.5)
 
@@ -64,8 +65,8 @@ templates:
       n_oncoming: {int: [4, 8]}
       n_with: {int: [0, 2]}
       speed: {range: [0.9, 1.5]}
-    blind_corner:
-      n: {int: [3, 6]}
+    blind_corner:             # no timed arrivals: the robot reaches the corner after the corridor (~25-150 s)
+      n: {int: [4, 6]}
       speed: {range: [1.0, 1.8]}
       riser_width: [3.0, 5.0]
     intersection:
