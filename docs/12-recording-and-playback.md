@@ -90,6 +90,39 @@ positions, so planners that don't use Nav2's goal checker are judged the same wa
 * `t` is absolute sim seconds since Gazebo started. `meta["t_start"]` is the episode start; the analysis package
   adds `t_rel = t - t_start`.
 
+### Batches: many episodes, many planners (`scripts/arena_batch.py`)
+
+For experiments, don't babysit launches: describe them in a jobs file and let the scheduler run them one after
+another (one simulation at a time; each uses ~5.5 of the 8 cores).
+
+```yaml
+# my_experiment/jobs.yaml
+out: data                        # run folders go here (relative to this file)
+defaults: {world: school_hallway, scenario: hallway_tame.json, episodes: 20, headless: true}
+jobs:
+  - {name: dsrnn, planner: dsrnn}
+  - {name: dwb, planner: dwb}
+  - {name: dwb_amcl, planner: dwb, args: ["localization:=amcl"]}   # any extra ros2 launch args
+```
+
+```bash
+uv run scripts/arena_batch.py my_experiment/jobs.yaml --dry-run   # list the jobs + a rough ETA
+uv run scripts/arena_batch.py my_experiment/jobs.yaml             # run them (Ctrl+C stops cleanly)
+uv run scripts/arena_batch.py my_experiment/jobs.yaml --resume    # after an interruption: skip finished jobs
+uv run scripts/arena_batch.py --planner dsrnn dwb --episodes 5 --out ~/arena_runs/quick   # one-off, no file
+```
+
+Per job, the scheduler:
+1. takes the shared simulator lock `/tmp/arena-sim.lock` (it waits if another batch holds it);
+2. launches `arena-launch.sh --headless --record=<out>`;
+3. waits until N episodes are complete, printing a live ETA;
+4. stops the sim and appends an entry to `<out>/batch_manifest.json` (run folder, episodes, status `complete` /
+   `stalled` / `failed`, minutes).
+
+Launch logs go to `<out>/logs/<job>.log`. A job is abandoned as `stalled` if no new episode starts for 15 min.
+Run it in the background with `nohup ... > batch.log 2>&1 &` if you want to log out.
+See [`first_experiment/`](../first_experiment/) for a complete example (jobs file → data → notebook).
+
 ## 2. File format
 
 ```

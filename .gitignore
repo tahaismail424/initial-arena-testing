@@ -14,3 +14,7 @@ arena_runs/
 *.mp4
 *.gif
 .ipynb_checkpoints/
+
+# first_experiment: recorded episodes and rendered videos (~100 MB)
+first_experiment/data/
+first_experiment/media/

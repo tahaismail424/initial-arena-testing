@@ -1,0 +1,11 @@
+# First experiment: 20 recorded episodes per planner in the tame hallway.
+#   uv run scripts/arena_batch.py first_experiment/jobs.yaml            (see scripts/arena_batch.py for options)
+out: data
+defaults:
+  world: school_hallway
+  scenario: hallway_tame.json
+  episodes: 20
+  headless: true
+jobs:
+  - {name: dsrnn, planner: dsrnn}
+  - {name: dwb, planner: dwb}
