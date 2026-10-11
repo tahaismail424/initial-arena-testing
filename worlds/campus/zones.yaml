@@ -1,0 +1,31 @@
+zones:
+  corridor:
+    rect: [0.0, 0.0, 35.0, 5.0]
+    role: counterflow corridor; its east end is the blind corner
+  riser:
+    rect: [30.0, 0.0, 35.0, 30.0]
+    role: vertical corridor joining corridor -> intersection -> door
+  crossing:
+    rect: [12.0, 18.0, 53.0, 23.0]
+    role: east-west corridor; crosses the riser = intersection
+  plaza:
+    rect: [20.0, 30.0, 48.0, 52.0]
+    role: open plaza; its south wall has the door
+door:
+  center: [32.5, 30.0]
+  axis: x
+  shell_width: 5.0
+anchors:
+  corridor_west: [2.0, 2.5]
+  corridor_mid: [18.0, 2.5]
+  corridor_east: [26.0, 2.5]
+  corner: [32.5, 2.5]
+  riser_mid: [32.5, 12.0]
+  intersection: [32.5, 20.5]
+  crossing_west: [14.0, 20.5]
+  crossing_east: [51.0, 20.5]
+  below_door: [32.5, 26.0]
+  above_door: [32.5, 34.0]
+  plaza_center: [34.0, 41.0]
+  plaza_far: [44.0, 48.0]
+wall_thickness: 0.2

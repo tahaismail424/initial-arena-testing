@@ -74,7 +74,8 @@ DOOR = {"center": (32.5, 30.0), "axis": "x", "shell_width": 5.0}
 # Named points the scenario generator uses (robot starts/goals, crowd sources/sinks). Add your own.
 ANCHORS = {
     "corridor_west": (2.0, 2.5),
-    "corridor_east": (27.0, 2.5),          # just before the blind corner (the corner itself is x 30-35)
+    "corridor_mid": (18.0, 2.5),           # blind_corner start: 12 m before the corner
+    "corridor_east": (26.0, 2.5),          # corridor_counterflow goal: past the narrow section, before the corner
     "corner": (32.5, 2.5),
     "riser_mid": (32.5, 12.0),
     "intersection": (32.5, 20.5),
@@ -111,48 +112,55 @@ def write_campus_world(name="campus", location=REPO_ROOT / "worlds", resolution=
 # --------------------------------------------------------------------------------------------- your TODOs
 
 def build_free_space(zones):
-    """TODO (step 1 in docs/14): the walkable floor as ONE shapely Polygon.
+    """The walkable floor as ONE shapely Polygon: the union of the zone rectangles.
 
-    Hints:
-      * shapely.geometry.box(x0, y0, x1, y1) makes a rectangle; shapely.union_all([...]) merges a list of them
-        (see gen_blocks + write_hallway_world in generate_hallway.py).
-      * Check the result is ONE connected piece: union_all returns a Polygon if it is, a MultiPolygon if some
-        zone doesn't touch the rest. Raise a clear error in that case (which zone is disconnected?).
-      * If your layout has a LOOP (zones connected in a ring), the polygon has a HOLE (free.interiors is not
-        empty). The proposed layout is a tree (no loops), but if you add one, build_walls and the map writer
-        must handle holes too - see their docstrings.
-    """
-    raise NotImplementedError("TODO step 1: union the zone rectangles into one Polygon (docs/14 §3)")
+    Raises if a zone doesn't touch the rest (MultiPolygon) or if the zones enclose a hole (a loop), because
+    build_walls / the map writer handle only a single outer ring."""
+    rects = {name: box(*z["rect"]) for name, z in zones.items()}
+    free = shapely.union_all(list(rects.values()))
+    if not isinstance(free, Polygon):
+        pieces = list(free.geoms)
+        main = max(pieces, key=lambda g: g.area)
+        loose = [n for n, r in rects.items() if not r.intersects(main)]
+        raise ValueError(f"zones are not one connected area; disconnected: {loose}")
+    if free.interiors:
+        raise ValueError(f"zones enclose {len(free.interiors)} hole(s) (a loop); build_walls only handles the "
+                         "outer boundary - see its docstring")
+    return free
 
 
 def build_walls(free):
-    """TODO (step 2): wall segments for walls.yaml, as [[[x1, y1], [x2, y2]], ...].
-
-    generate_hallway.gen_walls(free) already does this for the polygon's OUTER boundary (it pushes the outline
-    out by half a wall thickness so corridor widths stay exact, and merges collinear points). Start by calling it.
-
-    Then: does it cover holes? (free.interiors) For each interior ring you'd need the same treatment, but pushed
-    INTO the hole (buffer the hole polygon by -WALL_THICKNESS/2). Not needed for the proposed tree layout; leave a
-    clear error if free.interiors is non-empty, so you notice if you ever add a loop.
-    """
-    raise NotImplementedError("TODO step 2: wall segments (start with generate_hallway.gen_walls)")
+    """Wall segments for walls.yaml, as [[[x1, y1], [x2, y2]], ...]: the outer boundary pushed out by half a wall
+    thickness (generate_hallway.gen_walls). Only layouts without holes are supported (build_free_space checks)."""
+    if free.interiors:
+        raise ValueError("free space has holes; walls for interior rings are not implemented")
+    walls = gen_walls(free)
+    for (x1, y1), (x2, y2) in walls:      # HuNav turns every segment into an axis-aligned box
+        if abs(x1 - x2) > 1e-6 and abs(y1 - y2) > 1e-6:
+            raise ValueError(f"wall segment {(x1, y1)}->{(x2, y2)} is not axis-aligned")
+    return walls
 
 
 def save_map_png_with_holes(free, origin, size_px, resolution, world_dir):
-    """TODO (step 2b): map.png for Nav2. generate_hallway.save_map_png(free, ...) paints the outer boundary white
-    on a black canvas. That's all you need for a layout without holes, so to start just call it. (With holes:
-    also paint every interior ring black afterwards.)"""
-    raise NotImplementedError("TODO step 2b: write map.png (start with generate_hallway.save_map_png)")
+    """map.png for Nav2: free floor white on a black canvas (generate_hallway.save_map_png). No holes allowed."""
+    if free.interiors:
+        raise ValueError("free space has holes; map.png would need them painted black")
+    save_map_png(free, origin, size_px, resolution, world_dir)
 
 
 def save_default_scenario(world_dir):
-    """TODO (step 3): scenarios/default.json - the gauntlet task with no pedestrians, so the world can be
-    launched and driven before any crowd exists. Same JSON shape as generate_hallway.save_default_scenario:
-        {"robots": [{"start": [x, y, yaw], "goal": [x, y, yaw]}],
-         "obstacles": {"static": [], "dynamic": [], "interactive": []}}
-    Use ANCHORS["corridor_west"] as the start and ANCHORS["plaza_far"] as the goal. Keep goals >= 3 m from any
-    wall (the DS-RNN end-wall trap, docs/10 §8)."""
-    raise NotImplementedError("TODO step 3: default.json with the gauntlet start/goal")
+    """scenarios/default.json: the gauntlet task (corridor_west -> plaza_far) with no pedestrians or panels."""
+    (sx, sy), (gx, gy) = ANCHORS["corridor_west"], ANCHORS["plaza_far"]
+    scenario = {"robots": [{"start": [sx, sy, 0.0], "goal": [gx, gy, 0.0]}],
+                "obstacles": {"static": [], "dynamic": [], "interactive": []}}
+    with open(world_dir / "scenarios" / "default.json", "w") as f:
+        json.dump(scenario, f, indent=2)
+    # warmup.json: a 4 m drive, nobody else. Launch with it, then switch to the real scenarios (docs/14 §9): the
+    # first reset after a launch makes HuNav pedestrians jump several metres (docs/14 §10), the later ones don't.
+    warmup = {"robots": [{"start": [sx, sy, 0.0], "goal": [sx + 4.0, sy, 0.0]}],
+              "obstacles": {"static": [], "dynamic": [], "interactive": []}}
+    with open(world_dir / "scenarios" / "warmup.json", "w") as f:
+        json.dump(warmup, f, indent=2)
 
 
 # ----------------------------------------------------------------------------------------- done for you

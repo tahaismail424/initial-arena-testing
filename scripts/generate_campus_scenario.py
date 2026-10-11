@@ -164,6 +164,52 @@ class Builder:
         dy = self.rng.uniform(-amount, amount) if "y" in axis else 0.0
         return (pt[0] + dx, pt[1] + dy)
 
+    # ----- placing people on closed routes -------------------------------------------------------------------
+
+    def is_clear(self, pt, min_sep=0.9, robot_sep=1.5):
+        """True if pt is >= min_sep from every pedestrian start so far and >= robot_sep from the robot's start
+        and goal (nobody spawns on the robot or parks on its goal)."""
+        if any(math.dist(pt, a["pos"][:2]) < min_sep for a in self.agents):
+            return False
+        if self.robot and any(math.dist(pt, self.robot[k][:2]) < robot_sep for k in ("start", "goal")):
+            return False
+        return True
+
+    @staticmethod
+    def point_on_loop(route, i, t):
+        """The point a fraction t along segment i of the closed route (segment i: route[i] -> route[i+1])."""
+        (xa, ya), (xb, yb) = route[i], route[(i + 1) % len(route)]
+        return (xa + t * (xb - xa), ya + t * (yb - ya))
+
+    @staticmethod
+    def rotate_from(route, i):
+        """Waypoints in walking order for someone on segment i: next is route[i+1], looping round."""
+        return route[i + 1:] + route[:i + 1]
+
+    def phase_on_loop(self, route, segments=None, min_sep=0.9, check=None, tries=300):
+        """A uniformly random position (by length) along the closed route, or along only the given segment
+        indices. Populations on loops are then spread evenly from t = 0, so a zone is busy at ANY time the robot
+        arrives, not only at the start. Returns (i, t) for point_on_loop / rotate_from. The point must pass
+        is_clear(); `check(i, t) -> bool` can add a veto (e.g. for the other members of a group)."""
+        segs = list(range(len(route))) if segments is None else list(segments)
+        lengths = [math.dist(route[k], route[(k + 1) % len(route)]) for k in segs]
+        for _ in range(tries):
+            s = self.rng.uniform(0, sum(lengths))
+            for i, L in zip(segs, lengths):
+                if s <= L:
+                    break
+                s -= L
+            t = min(s / L, 1.0) if L > 0 else 0.0
+            if self.is_clear(self.point_on_loop(route, i, t), min_sep) and (check is None or check(i, t)):
+                return i, t
+        raise RuntimeError("couldn't place a pedestrian on its loop (too crowded?)")
+
+    def add_on_loop(self, cls, route, speed, group=-1, hunav=None, phase=None):
+        """add_pedestrian() at a random phase of the closed route (or at phase=(i, t)). Returns (i, t)."""
+        i, t = phase or self.phase_on_loop(route)
+        self.add_pedestrian(cls, self.point_on_loop(route, i, t), self.rotate_from(route, i), speed, group, hunav)
+        return i, t
+
     def scenario(self):
         if self.robot is None:
             raise ValueError("template didn't call set_robot()")
@@ -176,16 +222,21 @@ class Builder:
 # Register it in TEMPLATES at the bottom. Keep pedestrian routes inside their zone so templates don't interfere.
 
 def corridor_counterflow(campus, b, p):
-    """WORKED EXAMPLE. Narrow corridor with a stream of people coming the other way.
+    """Narrow corridor with two-way pedestrian traffic: people coming at the robot (counterflow) and people
+    overtaking it.
 
-    Geometry: the shell corridor is 5 m wide (y 0..5). Panels along both long walls, between x = narrow_x0 and
-    narrow_x1, leave a clear width p["width"] in the middle.
-    Robot: west end -> just before the blind corner, i.e. it must get through the whole narrow section.
-    Crowd: p["n_oncoming"] people walking -x through the narrow part (looping back on the far side), plus
-    p["n_with"] walking +x like the robot.
+    Geometry: the shell corridor is 5 m wide (y 0..5). Panels along both long walls between x = 6 and 22 leave a
+    clear width p["width"] in the middle (the robot's start x = 2 and goal x = 26 are in the wide part).
+    Robot: corridor_west (2, 2.5) -> corridor_east (26, 2.5), i.e. through the whole narrow section.
+    Crowd: p["n_oncoming"] people who start on their westbound leg (coming at the robot) and p["n_with"] who start
+    on their eastbound leg; everyone loops between a west turnaround (x 4.5..6) and an east one (x 22.5..24.5),
+    randomised per person so they don't pile up. If the corridor is >= 2.4 m wide, people keep right (westbound in
+    the north half, eastbound in the south half); narrower, everyone shares one lane and must squeeze past.
+    Timing: initial positions are spread uniformly along the starting leg, so oncoming people meet the robot from
+    the first seconds on, and with looping routes the corridor stays busy for the whole episode.
     """
     x0, y0, x1, y1 = campus.zone("corridor")
-    narrow_x0, narrow_x1 = 6.0, 26.0
+    narrow_x0, narrow_x1 = 6.0, 22.0
     mid = (y0 + y1) / 2
     gap = min(p["width"], (y1 - y0) - 0.2)
     side = ((y1 - y0) - gap) / 2                                   # how much each side gets narrowed
@@ -195,77 +246,231 @@ def corridor_counterflow(campus, b, p):
 
     b.set_robot(campus.anchor("corridor_west"), campus.anchor("corridor_east"))
 
-    lane_lo, lane_hi = mid - gap / 2 + 0.4, mid + gap / 2 - 0.4    # stay 0.4 m off the panels
-    for i in range(p["n_oncoming"]):
-        speed = b.rng.uniform(*p["speed"])
+    lane_lo, lane_hi = mid - gap / 2 + 0.45, mid + gap / 2 - 0.45  # body radius 0.35 + 0.1 off the panels
+    two_lanes = gap >= 2.4
+
+    def lanes():
+        if two_lanes:   # keep right: westbound (facing -x) walks the north half, eastbound the south half
+            return b.rng.uniform(mid + 0.15, lane_hi), b.rng.uniform(lane_lo, mid - 0.15)
         y = b.rng.uniform(lane_lo, lane_hi) if lane_hi > lane_lo else mid
-        start = (b.rng.uniform(narrow_x0, x1 - 6.0), y)               # spread along the corridor
-        route = [b.jitter((narrow_x0 - 2.0, y), axis="x"), b.jitter((x1 - 6.0, y), axis="x")]   # -x, then back
-        b.add_pedestrian("oncoming", start, route, speed)
-    for i in range(p["n_with"]):
-        speed = b.rng.uniform(*p["speed"])
-        y = b.rng.uniform(lane_lo, lane_hi) if lane_hi > lane_lo else mid
-        start = (b.rng.uniform(narrow_x0 + 2.0, narrow_x1), y)
-        route = [b.jitter((x1 - 6.0, y), axis="x"), b.jitter((narrow_x0 - 2.0, y), axis="x")]   # +x first
-        b.add_pedestrian("with_robot", start, route, speed)
+        return y, y
+
+    for cls, n, first_leg in (("oncoming", p["n_oncoming"], "west"), ("with_robot", p["n_with"], "east")):
+        for _ in range(n):
+            speed = b.rng.uniform(*p["speed"])
+            y_w, y_e = lanes()
+            lo, hi = b.rng.uniform(4.5, 6.0), b.rng.uniform(narrow_x1 + 0.5, narrow_x1 + 2.5)
+            route = [(lo, y_w), (lo, y_e), (hi, y_e), (hi, y_w)]   # west leg = segment 3, east leg = segment 1
+            seg = 3 if first_leg == "west" else 1
+            b.add_on_loop(cls, route, speed, phase=b.phase_on_loop(route, segments=[seg]))
 
 
 def door_exit(campus, b, p):
-    """TODO. Doorway against an exiting crowd (docs/14 §6.2).
-    Geometry: the door is campus.door (centre, shell_width 5 m along x at y = 30). Close it down to p["door_width"]
-    with two block_rect()s, one on each side of the gap, ~1 m deep (y 29.5..30.5 or so).
-    Robot: from campus.anchor("below_door") (or "intersection") -> into the plaza (e.g. "plaza_center").
-    Crowd: p["n_exiting"] people starting in the plaza near the door, walking out through the door into the riser,
-    then back (cyclic). Most should be in the plaza when the robot arrives: start them spread over the plaza's
-    southern part. Optional: a few people waiting/standing near the door (a route with two very close points).
-    Watch for: pedestrians have NO path planning (social force only): give them a waypoint on BOTH sides of the
-    door, each in line of sight of the next. Keep the door >= 1.2 m (only 1.4 m was tested; the Jackal's real width
-    makes 1.2 m tight).
+    """Doorway against an exiting crowd: can the robot hold back while people come through a narrow door, then go?
+
+    Geometry: the shell opening between the riser and the plaza (x 30..35 at y = 30) is closed down to a door of
+    width p["door_width"] (>= 1.2 m) centred at x = 32.5 + p["door_offset"], with one 1 m-deep panel block on each
+    side (y 29.5..30.5).
+    Robot: intersection (32.5, 20.5) -> plaza_center (34, 41), i.e. up the riser and through the door.
+    Crowd: p["n_exiting"] people with a home in the southern plaza. Their loop: home -> above the door -> door
+    centre -> below the door -> two points in the riser below the door (y 23.8..27, where the robot comes from)
+    -> back up through the door -> home. Every door passage has a waypoint on both sides AND in the door centre
+    (social forces only, no path planning); a door >= 2 m gets two keep-right lanes, a narrower one a single
+    file. p["n_waiting"] people stand beside the door in the plaza (clutter at the door).
+    Timing: with p["wave"] (standalone) everyone starts at home and walks out at once, so the exit wave fills the
+    door and the riser in front of the robot during its first ~10-40 s (DS-RNN arrives at the door after ~10 s,
+    DWB after ~40 s). Without it (gauntlet) people start at random points of their loops, so the door has two-way
+    traffic whenever the robot arrives.
     """
-    raise NotImplementedError("TODO: door_exit (docs/14 §6.2)")
+    rx0, ry0, rx1, ry1 = campus.zone("riser")
+    dcx, dcy = campus.door["center"]
+    shell = campus.door["shell_width"]
+    w = max(1.2, min(p["door_width"], shell - 1.0))
+    cx = dcx + p.get("door_offset", 0.0)
+    cx = min(max(cx, dcx - shell / 2 + 0.5 + w / 2), dcx + shell / 2 - 0.5 - w / 2)   # >= 0.5 m of block each side
+    b.block_rect(dcx - shell / 2, dcy - 0.5, cx - w / 2, dcy + 0.5)
+    b.block_rect(cx + w / 2, dcy - 0.5, dcx + shell / 2, dcy + 0.5)
+
+    b.set_robot(campus.anchor("intersection"), campus.anchor("plaza_center"))
+
+    if w >= 2.0:     # two lanes: going out (facing -y) keep right = -x side, coming in on the +x side
+        x_out, x_in, jit = cx - (w / 2 - 0.5), cx + (w / 2 - 0.5), 0.04
+    else:
+        x_out = x_in = cx
+        jit = min(0.1, (w - 1.0) / 2)
+    y_above, y_below = dcy + 1.4, dcy - 1.4
+    px0, py0, px1, py1 = campus.zone("plaza")
+
+    def sink():
+        return (b.rng.uniform(rx0 + 0.8, rx1 - 0.8), b.rng.uniform(ry1 - 6.2, ry1 - 3.0))
+
+    for _ in range(p["n_exiting"]):
+        speed = b.rng.uniform(*p["speed"])
+        for _ in range(200):          # a home in the southern plaza, clear of others / the robot's goal
+            home = (b.rng.uniform(px0 + 2.0, px1 - 2.0), b.rng.uniform(py0 + 1.8, py0 + 8.5))
+            if b.is_clear(home, robot_sep=2.0):
+                break
+        s1 = sink()
+        s2 = next(q for q in (sink() for _ in range(100)) if math.dist(q, s1) > 1.0)
+        xo = x_out + b.rng.uniform(-jit, jit)
+        xi = x_in + b.rng.uniform(-jit, jit)
+        route = [(xo, y_above), (xo, dcy), (xo, y_below), s1, s2, (xi, y_below), (xi, dcy), (xi, y_above), home]
+        phase = (len(route) - 1, 0.0) if p.get("wave", True) else None   # wave: start at home, heading out
+        b.add_on_loop("exiting", route, speed, phase=phase)
+
+    for _ in range(p.get("n_waiting", 0)):
+        for _ in range(200):
+            side = b.rng.choice([-1, 1])
+            q = (cx + side * b.rng.uniform(w / 2 + 0.9, w / 2 + 2.2), b.rng.uniform(dcy + 1.3, dcy + 2.3))
+            if b.is_clear(q, min_sep=1.0):
+                break
+        b.add_pedestrian("waiting", q, [(q[0] + 0.3, q[1]), q], 0.5)
 
 
 def blind_corner(campus, b, p):
-    """TODO. Blind corner (docs/14 §6.3).
-    Geometry: the L-turn where the corridor (east end, x 30..35) meets the riser. No panels needed, the walls
-    themselves block line of sight; optionally narrow the riser with p["width"].
-    Robot: corridor (x ~ 20) -> riser ("riser_mid"), so it has to turn the corner.
-    Crowd: p["n"] people walking DOWN the riser and turning WEST into the corridor (and back), so they appear
-    around the corner just as the robot gets there. Timing matters: start them at different heights in the riser
-    (spread over y 6..16) so someone is always about to come around. Faster walkers (p["speed"]) = less reaction
-    time. This is where lidar-based planners (DWB) and ground-truth-perception planners (DS-RNN) differ most.
+    """Blind corner: people come round the L-turn between the corridor and the riser with little warning.
+
+    Geometry: the corridor's east end (x 30..35, y 0..5) turns north into the riser; the wall corner at (30, 5)
+    hides the riser from a robot in the corridor (and vice versa). p["riser_width"] < 4.5 narrows the riser above
+    the corner (panels along its east wall, y 5.5..16.5); 4.5..5 leaves it at the full 5 m.
+    Robot: corridor_mid (18, 2.5) -> the riser at y = 12 (centred in the possibly narrowed riser).
+    Crowd: p["n"] people on a loop: down the riser on its west side (keep right), round the INSIDE of the corner
+    (1 m from the hidden wall corner, exactly where the robot turns), west along the corridor's north half to
+    x 24..27, back east along the south half, up the riser's east side, cross over at the top (y 14..17, >= 2 m
+    above the robot's goal). Speeds p["speed"] up to 2 m/s = little reaction time.
+    Timing: start positions are uniform along the loop, so someone comes round the corner every few seconds for
+    the whole episode (loop ~40 m, i.e. one person per ~40 / (n * speed) s).
     """
-    raise NotImplementedError("TODO: blind_corner (docs/14 §6.3)")
+    rx0, ry0, rx1, ry1 = campus.zone("riser")
+    cx0, cy0, cx1, cy1 = campus.zone("corridor")
+    w = min(p.get("riser_width", rx1 - rx0), rx1 - rx0)
+    y_narrow_top = 16.5
+    if (rx1 - rx0) - w < 0.5:          # a strip thinner than 0.5 m changes nothing: keep the full width
+        w = rx1 - rx0
+    else:
+        b.block_rect(rx0 + w, cy1 + 0.5, rx1, y_narrow_top)
+
+    goal_y = campus.anchor("riser_mid")[1]
+    b.set_robot(campus.anchor("corridor_mid"), (rx0 + w / 2, goal_y))
+
+    for _ in range(p["n"]):
+        speed = b.rng.uniform(*p["speed"])
+        x_d = b.rng.uniform(rx0 + 0.7, rx0 + w / 2 - 0.25)        # down lane (west side of the riser)
+        x_u = b.rng.uniform(rx0 + w / 2 + 0.25, rx0 + w - 0.7)    # up lane (east side)
+        y_top = b.rng.uniform(goal_y + 2.0, y_narrow_top + 0.5)
+        y_w = b.rng.uniform(cy1 - 1.6, cy1 - 0.8)                 # westbound lane (north half of the corridor)
+        y_e = b.rng.uniform(cy0 + 0.8, cy0 + 1.6)                 # eastbound lane (south half)
+        x_west = b.rng.uniform(24.0, 27.0)
+        route = [(x_d, y_top), (x_d, y_w), (x_west, y_w), (x_west, y_e), (x_u, y_e), (x_u, y_top)]
+        b.add_on_loop("corner", route, speed)
 
 
 def intersection(campus, b, p):
-    """TODO. Intersection with crossing streams (docs/14 §6.4).
-    Geometry: the riser crosses the east-west "crossing" zone at x 30..35, y 18..23.
-    Robot: "riser_mid" -> "below_door", i.e. straight through the intersection, perpendicular to the streams.
-    Crowd: two streams along the crossing corridor: p["n_east"] walking +x, p["n_west"] walking -x, looping between
-    "crossing_west" and "crossing_east" (keep-right lanes, like route_lane in generate_scenario.py). Optionally
-    p["group_frac"] of them in pairs/triples (use b.new_group() and parallel lanes ~0.8 m apart).
+    """Intersection with crossing streams: find a gap in perpendicular traffic.
+
+    Geometry: the riser crosses the east-west "crossing" corridor at x 30..35, y 18..23 (no panels).
+    Robot: riser_mid (32.5, 12) -> below_door (32.5, 26): straight through the intersection, perpendicular to the
+    streams.
+    Crowd: p["n_east"] people start walking +x, p["n_west"] -x. Everyone loops along the crossing corridor between
+    turnarounds at x 17..24 and 41..48 (randomised), keeping right (eastbound in the south half, westbound in the
+    north half), so each person crosses the riser twice per loop. A fraction p["group_frac"] of people walk in
+    pairs or triples (shared group_id, side by side on parallel lanes 0.7 m apart).
+    Timing: initial positions are uniform along each person's starting leg (~20 m on either side of the
+    intersection); with short loops (~45 m) a person crosses the riser every ~1-3 s for the whole episode.
     """
-    raise NotImplementedError("TODO: intersection (docs/14 §6.4)")
+    zx0, zy0, zx1, zy1 = campus.zone("crossing")
+    b.set_robot(campus.anchor("riser_mid"), campus.anchor("below_door"))
+    low = (zy0 + 0.7, (zy0 + zy1) / 2 - 0.5)          # south-half lane band
+    high = ((zy0 + zy1) / 2 + 0.5, zy1 - 0.7)         # north-half lane band
+    spacing = 0.7
+
+    for cls, n, d in (("eastbound", p["n_east"], +1), ("westbound", p["n_west"], -1)):
+        left = n
+        while left > 0:
+            size = 1
+            if left >= 2 and b.rng.random() < p.get("group_frac", 0.0):
+                size = min(left, b.rng.choice([2, 2, 3]))
+            left -= size
+            speed = b.rng.uniform(*p["speed"])
+            spread = spacing * (size - 1)
+            lo, hi = b.rng.uniform(17.0, 24.0), b.rng.uniform(41.0, 48.0)
+            go_band, back_band = (low, high) if d > 0 else (high, low)
+            s = 1 if d > 0 else -1                     # members spread toward the corridor's middle
+            if s > 0:
+                y_go = b.rng.uniform(go_band[0], max(go_band[0], go_band[1] - spread))
+                y_back = b.rng.uniform(min(back_band[1], back_band[0] + spread), back_band[1])
+            else:
+                y_go = b.rng.uniform(min(go_band[1], go_band[0] + spread), go_band[1])
+                y_back = b.rng.uniform(back_band[0], max(back_band[0], back_band[1] - spread))
+
+            def route_for(m):
+                dy = s * spacing * m
+                if d > 0:
+                    return [(hi, y_go + dy), (hi, y_back - dy), (lo, y_back - dy), (lo, y_go + dy)]
+                return [(lo, y_go + dy), (lo, y_back - dy), (hi, y_back - dy), (hi, y_go + dy)]
+
+            routes = [route_for(m) for m in range(size)]
+            group = b.new_group() if size > 1 else -1
+            # the go leg is segment 3 for both directions
+            phase = b.phase_on_loop(routes[0], segments=[3],
+                                    check=lambda i, t: all(b.is_clear(b.point_on_loop(r, i, t)) for r in routes))
+            for r in routes:
+                b.add_on_loop(cls if size == 1 else f"{cls}_group", r, speed, group=group, phase=phase)
 
 
 def plaza_dense(campus, b, p):
-    """TODO. Dense plaza (docs/14 §6.5).
-    Geometry: the plaza zone, no panels (optionally a few static "pillars": block_rect of 1 x 1 m).
-    Robot: "above_door" -> "plaza_far".
-    Crowd: p["n"] people milling: each gets a loop of 3-5 random points inside the plaza (keep 1.5 m off the
-    walls), random speeds from p["speed"]. Mix in behaviours via p["frac_impassive"] etc. (HuNav behavior.type:
-    1 regular, 2 impassive, 5 curious, 6 threatening; 3-6 need HuNav robot-awareness, see docs/14 §8).
-    This is the density stress test: DS-RNN only attends to the 5 nearest people.
+    """Dense plaza: crowd density beyond what DS-RNN was trained on (5 people), people milling in every direction.
+
+    Geometry: the plaza (x 20..48, y 30..52); no panels (the shell's 5 m opening to the riser stays open).
+    Robot: above_door (32.5, 34) -> plaza_far (44, 48), a ~18 m diagonal.
+    Crowd: p["n"] people milling around the robot's path: each walks a loop of 3-5 random points in a band of
+    half-width p["band"] around the start-goal line (inside the plaza, >= 1.5 m off its walls, >= 2 m from the
+    robot's start and goal), so the density is p["n"] / (~18 m x 2 * band). A fraction p["frac_standing"] stand
+    still (chatting), p["frac_impassive"] get HuNav behaviour 2 (IMPASSIVE) instead of 1 (REGULAR).
+    Timing: everyone is on their loop from t = 0 at a random phase; the band stays equally crowded throughout.
     """
-    raise NotImplementedError("TODO: plaza_dense (docs/14 §6.5)")
+    a, g = campus.anchor("above_door"), campus.anchor("plaza_far")
+    b.set_robot(a, g)
+    px0, py0, px1, py1 = campus.zone("plaza")
+    ux, uy = g[0] - a[0], g[1] - a[1]
+    L = math.hypot(ux, uy)
+    ux, uy = ux / L, uy / L
+    half = p.get("band", 4.0)
+
+    def point():
+        for _ in range(1000):
+            s, v = b.rng.uniform(-1.0, L + 1.0), b.rng.uniform(-half, half)
+            q = (a[0] + s * ux - v * uy, a[1] + s * uy + v * ux)
+            if px0 + 1.5 <= q[0] <= px1 - 1.5 and py0 + 1.5 <= q[1] <= py1 - 1.5 \
+                    and math.dist(q, a) >= 2.0 and math.dist(q, g) >= 2.0:
+                return q
+        raise RuntimeError("no milling point found")
+
+    n_stand = round(p["n"] * p.get("frac_standing", 0.0))
+    for k in range(p["n"]):
+        hunav = {"behavior": {"type": 2}} if b.rng.random() < p.get("frac_impassive", 0.0) else None
+        if k < n_stand:
+            for _ in range(200):
+                q = point()
+                if b.is_clear(q, min_sep=1.0, robot_sep=2.5):
+                    break
+            b.add_pedestrian("standing", q, [(q[0] + 0.3, q[1]), q], 0.5, hunav=hunav)
+            continue
+        route = [point() for _ in range(b.rng.randint(3, 5))]
+        b.add_on_loop("milling", route, b.rng.uniform(*p["speed"]), hunav=hunav)
 
 
 def gauntlet(campus, b, p):
-    """TODO (last). The long run through every zone: robot "corridor_west" -> "plaza_far".
-    Easiest: call the other templates with their parameter dicts (p["corridor_counterflow"], p["door_exit"], ...),
-    then overwrite the robot task with b.set_robot(...) at the end (each template sets its own robot task)."""
-    raise NotImplementedError("TODO: gauntlet (docs/14 §6.6)")
+    """The long run through every zone: robot corridor_west (2, 2.5) -> plaza_far (44, 48), ~80 m.
+
+    Builds every other template with its own parameter block (p["corridor_counterflow"], p["blind_corner"], ...;
+    smaller crowds than the standalone ranges so the total stays ~30-55 people), then overrides the robot task.
+    Each zone's population lives on closed loops inside its zone with random phases, so every zone is busy
+    whenever the robot gets there (DS-RNN reaches the plaza after ~1.5 min, DWB after ~5 min).
+    """
+    for name in ("corridor_counterflow", "blind_corner", "intersection", "door_exit", "plaza_dense"):
+        TEMPLATES[name](campus, b, p[name])
+    b.set_robot(campus.anchor("corridor_west"), campus.anchor("plaza_far"))
 
 
 TEMPLATES = {
@@ -302,6 +507,67 @@ def generate(spec, campus, template, seed):
     b = Builder(spec, rng)
     TEMPLATES[template](campus, b, params)
     return b.scenario(), params
+
+
+PED_CLEARANCE = 0.45      # waypoints/starts must be this far inside the free space (body radius 0.35 + 0.1)
+SIGHT_CLEARANCE = 0.3     # each leg of a route must stay this far from walls/panels (line of sight with a body)
+ROBOT_CLEARANCE = 0.5     # robot start/goal this far from walls/panels
+
+
+def panel_footprint(s):
+    """shapely box of a static panel entry (model panel_x<L> / panel_y<L>, origin at the footprint centre)."""
+    from shapely.geometry import box
+    model = s["model"]
+    L = {suf: length for length, suf in PANEL_LENGTHS.items()}[model[len("panel_x"):]]
+    w, h = (L, PANEL_THICKNESS) if model.startswith("panel_x") else (PANEL_THICKNESS, L)
+    x, y = s["pos"][:2]
+    return box(x - w / 2, y - h / 2, x + w / 2, y + h / 2)
+
+
+def free_space(scenario, campus):
+    """The walkable floor of one scenario: union of the zones minus every panel footprint."""
+    import shapely
+    from shapely.geometry import box
+    free = shapely.union_all([box(*r) for r in campus.zones.values()])
+    panels = [panel_footprint(s) for s in scenario["obstacles"]["static"]]
+    return free.difference(shapely.union_all(panels)) if panels else free
+
+
+def check_scenario(scenario, campus):
+    """Static sanity checks; returns a list of problems (empty = OK):
+    every pedestrian start/waypoint inside the free space (with body clearance), every leg of every closed route
+    in line of sight (HuNav has no path planning), robot start/goal clear, panels unrotated and uniquely named."""
+    from shapely.geometry import LineString, Point
+    free = free_space(scenario, campus)
+    pt_ok, leg_ok, robot_ok = free.buffer(-PED_CLEARANCE), free.buffer(-SIGHT_CLEARANCE), free.buffer(-ROBOT_CLEARANCE)
+    problems = []
+    names = [s["name"] for s in scenario["obstacles"]["static"]]
+    if len(names) != len(set(names)):
+        problems.append("duplicate panel names")
+    problems += [f"{s['name']} is rotated" for s in scenario["obstacles"]["static"] if abs(s["pos"][2]) > 1e-9]
+    for k in ("start", "goal"):
+        if not robot_ok.contains(Point(scenario["robots"][0][k][:2])):
+            problems.append(f"robot {k} {scenario['robots'][0][k][:2]} too close to a wall/panel")
+    for a in scenario["obstacles"]["dynamic"]:
+        pts = [tuple(a["pos"][:2])] + [tuple(w[:2]) for w in a["waypoints"]]
+        for q in pts:
+            if not pt_ok.contains(Point(q)):
+                problems.append(f"{a['name']}: point {q} inside/too close to a wall or panel")
+        legs = list(zip(pts, pts[1:])) + [(pts[-1], pts[1])]           # start -> wp0 -> ... -> wp_last -> wp0
+        for q0, q1 in legs:
+            if q0 != q1 and not leg_ok.contains(LineString([q0, q1])):
+                problems.append(f"{a['name']}: no line of sight {q0} -> {q1}")
+    return problems
+
+
+def write_map(world_dir, name, scenario):
+    """Per-scenario Nav2 map with the panels rasterised in (scripts/scenario_maps.py, owned by the infra
+    work). Sets scenario["map"]. Returns the map path, or None if scenario_maps.py isn't available."""
+    try:
+        from scenario_maps import write_scenario_map
+    except ImportError:
+        return None
+    return write_scenario_map(world_dir, name, scenario)
 
 
 def save_preview(scenario, world_dir, out_png, title):
@@ -352,6 +618,8 @@ def main():
     ap.add_argument("--only", nargs="+", help="only these templates (default: all templates in the spec)")
     ap.add_argument("--no-preview", action="store_true", help="skip preview PNGs (faster for many seeds)")
     ap.add_argument("--link", action="store_true", help="also (re)link the world into Arena")
+    ap.add_argument("--no-map", action="store_true",
+                    help="don't write per-scenario Nav2 maps (default: write them, panels rasterised in)")
     args = ap.parse_args()
 
     spec = yaml.safe_load(Path(args.spec).read_text())
@@ -367,10 +635,17 @@ def main():
         with open(manifest) as f:
             rows = {r["scenario"]: r for r in csv.DictReader(f)}
 
+    warned_map = False
     for template in templates:
         for seed in seeds:
             name = f"{template}_s{seed}"
             scenario, params = generate(spec, campus, template, seed)
+            problems = check_scenario(scenario, campus)
+            if problems:
+                raise ValueError(f"{name}: " + "; ".join(problems))
+            if not args.no_map and write_map(world_dir, name, scenario) is None and not warned_map:
+                print("NOTE: scripts/scenario_maps.py not found - no per-scenario maps (Nav2 uses map.png)")
+                warned_map = True
             (world_dir / "scenarios" / f"{name}.json").write_text(json.dumps(scenario, indent=2))
             if not args.no_preview:
                 short = ", ".join(f"{k}={v:.2f}" if isinstance(v, float) else f"{k}={v}" for k, v in params.items()

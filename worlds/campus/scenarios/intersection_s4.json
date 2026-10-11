@@ -1,0 +1,797 @@
+{
+  "robots": [
+    {
+      "start": [
+        32.5,
+        12.0,
+        0.0
+      ],
+      "goal": [
+        32.5,
+        26.0,
+        0.0
+      ]
+    }
+  ],
+  "obstacles": {
+    "static": [],
+    "dynamic": [
+      {
+        "name": "eastbound_0",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          40.75,
+          19.13,
+          0.0
+        ],
+        "waypoints": [
+          [
+            45.32,
+            19.13,
+            0.0
+          ],
+          [
+            45.32,
+            21.12,
+            0.0
+          ],
+          [
+            18.04,
+            21.12,
+            0.0
+          ],
+          [
+            18.04,
+            19.13,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.25,
+        "group_id": -1,
+        "class": "eastbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_1",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          38.59,
+          19.24,
+          0.0
+        ],
+        "waypoints": [
+          [
+            43.01,
+            19.24,
+            0.0
+          ],
+          [
+            43.01,
+            22.22,
+            0.0
+          ],
+          [
+            23.1,
+            22.22,
+            0.0
+          ],
+          [
+            23.1,
+            19.24,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.18,
+        "group_id": -1,
+        "class": "eastbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_group_0",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          25.76,
+          18.7,
+          0.0
+        ],
+        "waypoints": [
+          [
+            45.97,
+            18.7,
+            0.0
+          ],
+          [
+            45.97,
+            22.3,
+            0.0
+          ],
+          [
+            17.52,
+            22.3,
+            0.0
+          ],
+          [
+            17.52,
+            18.7,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.07,
+        "group_id": 1,
+        "class": "eastbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_group_1",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          25.76,
+          19.4,
+          0.0
+        ],
+        "waypoints": [
+          [
+            45.97,
+            19.4,
+            0.0
+          ],
+          [
+            45.97,
+            21.6,
+            0.0
+          ],
+          [
+            17.52,
+            21.6,
+            0.0
+          ],
+          [
+            17.52,
+            19.4,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.07,
+        "group_id": 1,
+        "class": "eastbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_group_2",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          25.76,
+          20.1,
+          0.0
+        ],
+        "waypoints": [
+          [
+            45.97,
+            20.1,
+            0.0
+          ],
+          [
+            45.97,
+            20.9,
+            0.0
+          ],
+          [
+            17.52,
+            20.9,
+            0.0
+          ],
+          [
+            17.52,
+            20.1,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.07,
+        "group_id": 1,
+        "class": "eastbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_2",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          34.4,
+          18.83,
+          0.0
+        ],
+        "waypoints": [
+          [
+            44.23,
+            18.83,
+            0.0
+          ],
+          [
+            44.23,
+            21.16,
+            0.0
+          ],
+          [
+            18.87,
+            21.16,
+            0.0
+          ],
+          [
+            18.87,
+            18.83,
+            0.0
+          ]
+        ],
+        "desired_velocity": 0.9,
+        "group_id": -1,
+        "class": "eastbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_3",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          21.98,
+          19.02,
+          0.0
+        ],
+        "waypoints": [
+          [
+            43.57,
+            19.02,
+            0.0
+          ],
+          [
+            43.57,
+            21.13,
+            0.0
+          ],
+          [
+            21.23,
+            21.13,
+            0.0
+          ],
+          [
+            21.23,
+            19.02,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.04,
+        "group_id": -1,
+        "class": "eastbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "eastbound_4",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          37.16,
+          19.01,
+          0.0
+        ],
+        "waypoints": [
+          [
+            46.32,
+            19.01,
+            0.0
+          ],
+          [
+            46.32,
+            22.0,
+            0.0
+          ],
+          [
+            19.9,
+            22.0,
+            0.0
+          ],
+          [
+            19.9,
+            19.01,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.37,
+        "group_id": -1,
+        "class": "eastbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_0",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          31.79,
+          21.0,
+          0.0
+        ],
+        "waypoints": [
+          [
+            23.43,
+            21.0,
+            0.0
+          ],
+          [
+            23.43,
+            18.87,
+            0.0
+          ],
+          [
+            41.55,
+            18.87,
+            0.0
+          ],
+          [
+            41.55,
+            21.0,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.46,
+        "group_id": -1,
+        "class": "westbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_0",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          39.76,
+          22.3,
+          0.0
+        ],
+        "waypoints": [
+          [
+            23.18,
+            22.3,
+            0.0
+          ],
+          [
+            23.18,
+            18.7,
+            0.0
+          ],
+          [
+            44.1,
+            18.7,
+            0.0
+          ],
+          [
+            44.1,
+            22.3,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.34,
+        "group_id": 2,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_1",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          39.76,
+          21.6,
+          0.0
+        ],
+        "waypoints": [
+          [
+            23.18,
+            21.6,
+            0.0
+          ],
+          [
+            23.18,
+            19.4,
+            0.0
+          ],
+          [
+            44.1,
+            19.4,
+            0.0
+          ],
+          [
+            44.1,
+            21.6,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.34,
+        "group_id": 2,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_2",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          39.76,
+          20.9,
+          0.0
+        ],
+        "waypoints": [
+          [
+            23.18,
+            20.9,
+            0.0
+          ],
+          [
+            23.18,
+            20.1,
+            0.0
+          ],
+          [
+            44.1,
+            20.1,
+            0.0
+          ],
+          [
+            44.1,
+            20.9,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.34,
+        "group_id": 2,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_1",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          41.02,
+          21.97,
+          0.0
+        ],
+        "waypoints": [
+          [
+            20.25,
+            21.97,
+            0.0
+          ],
+          [
+            20.25,
+            19.99,
+            0.0
+          ],
+          [
+            43.88,
+            19.99,
+            0.0
+          ],
+          [
+            43.88,
+            21.97,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.49,
+        "group_id": -1,
+        "class": "westbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_2",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          30.09,
+          22.0,
+          0.0
+        ],
+        "waypoints": [
+          [
+            23.44,
+            22.0,
+            0.0
+          ],
+          [
+            23.44,
+            19.03,
+            0.0
+          ],
+          [
+            43.93,
+            19.03,
+            0.0
+          ],
+          [
+            43.93,
+            22.0,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.07,
+        "group_id": -1,
+        "class": "westbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_3",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          22.09,
+          22.3,
+          0.0
+        ],
+        "waypoints": [
+          [
+            21.19,
+            22.3,
+            0.0
+          ],
+          [
+            21.19,
+            18.7,
+            0.0
+          ],
+          [
+            46.12,
+            18.7,
+            0.0
+          ],
+          [
+            46.12,
+            22.3,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.16,
+        "group_id": 3,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_4",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          22.09,
+          21.6,
+          0.0
+        ],
+        "waypoints": [
+          [
+            21.19,
+            21.6,
+            0.0
+          ],
+          [
+            21.19,
+            19.4,
+            0.0
+          ],
+          [
+            46.12,
+            19.4,
+            0.0
+          ],
+          [
+            46.12,
+            21.6,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.16,
+        "group_id": 3,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_group_5",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          22.09,
+          20.9,
+          0.0
+        ],
+        "waypoints": [
+          [
+            21.19,
+            20.9,
+            0.0
+          ],
+          [
+            21.19,
+            20.1,
+            0.0
+          ],
+          [
+            46.12,
+            20.1,
+            0.0
+          ],
+          [
+            46.12,
+            20.9,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.16,
+        "group_id": 3,
+        "class": "westbound_group",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      },
+      {
+        "name": "westbound_3",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          43.33,
+          21.52,
+          0.0
+        ],
+        "waypoints": [
+          [
+            19.18,
+            21.52,
+            0.0
+          ],
+          [
+            19.18,
+            19.61,
+            0.0
+          ],
+          [
+            47.15,
+            19.61,
+            0.0
+          ],
+          [
+            47.15,
+            21.52,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.32,
+        "group_id": -1,
+        "class": "westbound",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 5.0,
+          "obstacle_force_factor": 10.0
+        }
+      }
+    ],
+    "interactive": []
+  },
+  "map": "scenario_maps/intersection_s4.yaml"
+}

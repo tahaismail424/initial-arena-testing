@@ -22,26 +22,63 @@ defaults:                     # HuNav fields for every pedestrian (see scenarios
     obstacle_force_factor: 10.0
 
 templates:
-  corridor_counterflow:       # worked example
+  corridor_counterflow:       # two-way traffic in a corridor narrowed by panels (x 6..22)
     width: [2.0, 4.0]         # clear width of the narrowed section (m); the shell corridor is 5 m
-    n_oncoming: {int: [6, 14]}
-    n_with: {int: [0, 4]}
+    n_oncoming: {int: [6, 12]}  # start on their westbound leg (towards the robot)
+    n_with: {int: [0, 4]}       # start on their eastbound leg (overtaking the robot)
     speed: {range: [0.9, 1.5]}
 
-  # --- TODO: fill these in as you write the templates (names must match TEMPLATES in the script)
-  # door_exit:
-  #   door_width: [0.9, 2.0]
-  #   n_exiting: {int: [8, 20]}
-  #   speed: {range: [0.8, 1.4]}
-  # blind_corner:
-  #   n: {int: [3, 8]}
-  #   speed: {range: [1.0, 2.0]}
-  # intersection:
-  #   n_east: {int: [4, 10]}
-  #   n_west: {int: [4, 10]}
-  #   speed: {range: [0.9, 1.5]}
-  #   group_frac: [0.0, 0.5]
-  # plaza_dense:
-  #   n: {int: [15, 40]}
-  #   speed: {range: [0.5, 1.3]}
-  #   frac_impassive: [0.0, 0.3]
+  door_exit:                  # door between riser and plaza against an exiting crowd
+    door_width: [1.2, 2.2]    # m; >= 1.2 (Jackal ~0.5 m wide incl. wheels; people 0.7 m)
+    door_offset: [-1.0, 1.0]  # door centre relative to the shell opening's centre (clipped: >= 0.5 m block each side)
+    n_exiting: {int: [8, 16]}
+    n_waiting: {int: [0, 3]}  # people standing beside the door (plaza side)
+    speed: {range: [0.8, 1.4]}
+    wave: true                # everyone starts at home in the plaza and walks out at t = 0
+
+  blind_corner:               # people come round the corridor -> riser corner
+    n: {int: [3, 8]}
+    speed: {range: [1.0, 2.0]}
+    riser_width: [3.0, 5.0]   # < 5 narrows the riser above the corner (y 5.5..16.5)
+
+  intersection:               # two crossing streams at the riser x crossing corridor
+    n_east: {int: [4, 10]}
+    n_west: {int: [4, 10]}
+    speed: {range: [0.9, 1.5]}
+    group_frac: [0.0, 0.5]    # probability that a person starts a pair/triple instead of walking alone
+
+  plaza_dense:                # dense milling crowd around the robot's diagonal across the plaza
+    n: {int: [15, 35]}
+    band: [3.0, 5.0]          # half-width (m) of the band around the start-goal line where people mill
+    speed: {range: [0.5, 1.3]}
+    frac_impassive: [0.0, 0.3]  # HuNav behaviour 2 instead of 1
+    frac_standing: [0.0, 0.15]  # people standing still in the band
+
+  gauntlet:                   # every zone in one ~80 m episode; smaller crowds (total ~30-55 people)
+    corridor_counterflow:
+      width: [2.2, 4.0]
+      n_oncoming: {int: [4, 8]}
+      n_with: {int: [0, 2]}
+      speed: {range: [0.9, 1.5]}
+    blind_corner:
+      n: {int: [3, 6]}
+      speed: {range: [1.0, 1.8]}
+      riser_width: [3.0, 5.0]
+    intersection:
+      n_east: {int: [3, 6]}
+      n_west: {int: [3, 6]}
+      speed: {range: [0.9, 1.5]}
+      group_frac: [0.0, 0.4]
+    door_exit:
+      door_width: [1.2, 2.2]
+      door_offset: [-1.0, 1.0]
+      n_exiting: {int: [6, 10]}
+      n_waiting: {int: [0, 2]}
+      speed: {range: [0.8, 1.4]}
+      wave: false             # random phases: two-way door traffic whenever the robot arrives
+    plaza_dense:
+      n: {int: [12, 20]}
+      band: [3.0, 5.0]
+      speed: {range: [0.5, 1.3]}
+      frac_impassive: [0.0, 0.3]
+      frac_standing: [0.0, 0.15]
