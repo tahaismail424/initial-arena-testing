@@ -62,6 +62,16 @@ Read from `task_generator/node.py`, `tasks/task_factory.py` and our `robot_manag
 | `/task_generator_node/task_reset` | `std_msgs/Int16` | reset done: robot at its start, goal sent → **start** episode `data` (0, 1, 2, …) |
 | `/task_generator_node/jackal/navigate_to_pose/_action/status` | `action_msgs/GoalStatusArray` | Nav2 goal states; any goal of *this* episode `SUCCEEDED` → `success` |
 | `/task_generator_node/jackal/goal_pose` | `PoseStamped` | the episode's goal (published right before `task_reset`) |
+| `/task_generator_node/scenario_info` | `std_msgs/String` (latched) | our arena-rosnav patch: JSON `{"episode", "file", "map", "map_loaded", "map_ok", "world"}`, published by every reset *before* `task_reset` → the episode's `scenario` / `map` labels |
+
+**Which scenario an episode ran** (matters when scenarios are hot-switched, see Batches below). Each reset of the
+task generator reads `task.scenario.file` once (one snapshot shared by the robot task, the obstacles and the map)
+and publishes what it applied on `scenario_info`, tagged with the episode index that the following `task_reset`
+carries. The recorder labels episode N with the `scenario_info` whose `episode` is N, so the label is exactly what
+was spawned, even if someone changes the parameter during the reset. `meta["scenario_source"]` says where the label
+came from: `scenario_info` (the guarantee above), `parameter` (fallback for an Arena without the patch: the
+parameter's value read at the episode start, which can be wrong if it changed during the reset) or `launch`
+(nothing else answered; the launch argument).
 
 Outcome labels in `meta.json`:
 
@@ -112,24 +122,63 @@ uv run scripts/arena_batch.py my_experiment/jobs.yaml --resume    # after an int
 uv run scripts/arena_batch.py --planner dsrnn dwb --episodes 5 --out ~/arena_runs/quick   # one-off, no file
 ```
 
-Per job, the scheduler:
-1. takes the shared simulator lock `/tmp/arena-sim.lock` (it waits if another batch holds it);
-2. launches `arena-launch.sh --headless --record=<out>`;
-3. waits until N episodes are complete, printing a live ETA;
-4. stops the sim and appends an entry to `<out>/batch_manifest.json` (run folder, episodes, status `complete` /
-   `stalled` / `failed`, minutes).
+**Many scenarios in one launch (hot-switching).** A job with `scenarios` instead of `scenario` records
+`episodes_per_scenario` episodes of each listed scenario in ONE launch (saves ~1 min of startup per scenario):
 
-Launch logs go to `<out>/logs/<job>.log`. A job is abandoned as `stalled` if no new episode starts for 15 min.
+```yaml
+jobs:
+  - name: campus_dwb
+    planner: dwb
+    world: campus
+    scenarios: ["corridor_counterflow_s*.json", "door_exit_s0.json"]   # names or globs in this repo's
+    episodes_per_scenario: 2                                           #   worlds/<world>/scenarios/
+    order: sequential        # or shuffled (seeded: `seed`, default 0)
+```
+Globs are expanded against this repo's `worlds/<world>/scenarios/` (sorted, duplicates dropped); the files must
+also be linked into Arena and built (docs/14 §1). `--dry-run` prints the expanded list.
+
+Per job, the scheduler:
+1. takes the shared simulator lock `/tmp/arena-sim.lock` (it waits if another batch or agent holds it);
+2. launches `arena-launch.sh --headless --record=<out>` with the (first) scenario;
+3. polls the run folder every 4 s and counts finished episodes **per scenario from the recorder's labels**
+   (`meta.json` `scenario`, i.e. what the task generator actually applied; see "Which scenario an episode ran");
+4. multi-scenario jobs: while the *last* wanted episode of a scenario runs, it sets `task.scenario.file` to the next
+   one (SetParameters service, 3 tries with a 45 s timeout each), so the automatic reset at the end of that
+   episode loads it. If the switch lands too late (the reset already started), the extra episode is recorded with
+   its true label, cut short with `/task_generator_node/reset_task` (outcome `reset`) and not counted;
+5. prints progress per scenario and an ETA after every finished episode; stops the sim when every scenario has
+   its episodes and writes `<out>/batch_manifest.json`.
+
+Only episodes with outcome `success` / `timeout` / `aborted` count (`reset` = cut short, `incomplete` = the last
+one, cut by the stop). In the analysis, drop those two outcomes.
+
+`batch_manifest.json`, one entry per job: `name`, `planner`, `world`, `status` (`complete`, `partial`, `stalled`,
+`failed`), `episodes_requested`, `episodes_complete`, `minutes`, `run_dir` (latest launch), `scenarios`
+(`{file: {requested, complete}}`), `runs` (one per launch: `run_dir`, `status`, `minutes`, `episodes` per scenario,
+`extra_episodes`, `switches` = when the parameter was set and during which episode). Single-scenario jobs also keep
+`scenario`. `--resume` skips complete jobs and relaunches an unfinished one with only the missing scenarios and
+episodes (entries from the old single-scenario manifest format are rerun whole).
+
+Launch logs go to `<out>/logs/<job>.log`. A launch is abandoned as `stalled` if no new episode starts for
+`stall_limit` s (default 900), and `failed` if the launch exits or never creates a run folder.
 Run it in the background with `nohup ... > batch.log 2>&1 &` if you want to log out.
+
+*Verified 2026-10-11* (school_hallway, DWB): one job, `scenarios: ["ilt_door*_map.json", "ilt_open.json"]` × 2
+episodes, in one launch: 8.5 min, 6/6 successes, both switches made during the last episode of the previous
+scenario (no extra episodes). Every episode's label matched what was spawned: robot start (±0.1 m) and goal equal
+to that scenario's JSON, and the recorded pedestrian names equal to its `obstacles.dynamic` names.
 See [`first_experiment/`](../first_experiment/) for a complete example (jobs file → data → notebook).
 
 ## 2. File format
 
 ```
 ~/arena_runs/<YYYYmmdd-HHMMSS>_<local_planner>_<scenario>/
-├── run.json             launch args, planner, world, scenario, robot_radius, rate_hz, repo_commit
-├── scenario.json        copy of the scenario JSON that was used (agent classes, waypoints, radii)
+├── run.json             launch args, planner, world, scenario (= the LAUNCH scenario), scenarios (every
+│                        scenario an episode used, in order), robot_radius, rate_hz, repo_commit
+├── scenario.json        copy of the launch scenario JSON (agent classes, waypoints, radii)
+├── scenarios/<f>.json   copy of every scenario file an episode used (one per scenario when hot-switching)
 ├── world/               copy of worlds/<world>/map/ (map.png, map.yaml, walls.yaml) → runs stay plottable
+│   └── scenario_maps/   the per-scenario maps the episodes used (docs/14 §9), only those
 └── episode_000/
     ├── meta.json        episode metadata and outcome
     ├── robot.csv        one row per sample (10 Hz sim time)
@@ -184,8 +233,11 @@ previous one by > 5 cm somewhere. `ep.plan_at(t)` returns the plan that was curr
 
 ### `meta.json`
 
-`local_planner`, `global_planner`, `world`, `scenario`, `robot`, `robot_radius`, `episode` (Arena's episode
-index), `episode_dir`, `t_start`, `t_end`, `duration` (sim s), `start` `[x, y, yaw]` (pose at the first sample),
+`local_planner`, `global_planner`, `world`, `scenario` (the scenario file the task generator **actually applied**
+for this episode, see "Which scenario an episode ran"), `map` (the scenario's own map, e.g.
+`scenario_maps/door_exit_s3.yaml` relative to the world's `map/`, or `null` = the world's map), `map_loaded` (the
+absolute map.yaml map_server served), `scenario_source` (`scenario_info` / `parameter` / `launch`), `robot`,
+`robot_radius`, `episode` (Arena's episode index), `episode_dir`, `t_start`, `t_end`, `duration` (sim s), `start` `[x, y, yaw]` (pose at the first sample),
 `goal` `[x, y, yaw]`, `goal_tolerance`, `timeout`, `outcome`, `outcome_source` (`nav2_succeeded` / `duration` /
 `nav2_aborted` / `unknown` / `recorder`), `final_goal_distance`, `nav2_goals` (goals sent this episode),
 `nav2_final_status`, `wall_start`, `samples`, `plans`.
@@ -208,12 +260,14 @@ ep.play()                     # inline video
 | `load_run(path)` | `Run`: `.episodes`, `.meta` (run.json), `.summary(human_radius=None)` |
 | `load_episode(path)` | one `Episode` from an `episode_NNN` directory |
 | `ep.meta`, `ep.outcome`, `ep.start`, `ep.goal`, `ep.robot_radius` | metadata |
+| `ep.scenario`, `ep.scenario_file`, `ep.scenario_spec` | the scenario file this episode actually ran, the run's copy of it, its JSON as a dict |
+| `run.scenarios` | scenario files used by the run's episodes, in order of first use |
 | `ep.robot`, `ep.humans`, `ep.plan`, `ep.events` | DataFrames (section 2), loaded on first use |
 | `ep.distances(human_radius=None)` | one row per (sample, pedestrian): `t, id, name, center_dist, clearance, rx, ry, hx, hy` |
 | `ep.collisions(human_radius=None)` | one row per contact: `id, name, t_start, t_end, duration, min_clearance` |
 | `ep.summary(human_radius=None)` | dict of metrics (below) |
 | `ep.plan_at(t)` | the global plan current at sim time `t` |
-| `ep.world` | `World`: `.walls`, `.map_image`, `.bounds`, `.wall_distance(x, y)` |
+| `ep.world` | `World`: `.walls`, `.map_image` (the episode's per-scenario map if it had one, so panels show in plots), `.bounds`, `.wall_distance(x, y)` (walls.yaml only, not panels) |
 | `ep.plot(t=None, view="full")` | draw one frame `t` seconds after the episode start (same clock as the frame's label; default: last sample), returns the Axes |
 | `ep.animation(speed=4, fps=20, view="full")` | matplotlib `FuncAnimation` |
 | `ep.play(speed=4, fps=20, view="full")` | Jupyter: inline HTML5 video (JS player with slider if no ffmpeg) |
@@ -232,6 +286,7 @@ Robot radius is `meta["robot_radius"]` (0.27 m), pedestrian radius HuNav's `radi
 
 | Key | Meaning |
 |---|---|
+| `episode`, `planner`, `scenario`, `map` | from the metadata; `scenario` is per episode (hot-switching), `map` = the scenario's own map or None |
 | `outcome`, `success` | from the metadata; `success` = Nav2 reported the goal reached |
 | `reached_goal`, `final_goal_dist`, `time_to_goal` | from positions: within `goal_tolerance` (0.5 m) at the end / first time within it |
 | `duration` | episode length (sim s) |

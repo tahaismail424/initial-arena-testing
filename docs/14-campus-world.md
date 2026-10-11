@@ -254,11 +254,11 @@ separate task. Until then, use behaviour types 1 and 2 only.
 
 ---
 
-## 9. Running many scenarios
+## 9. Running many scenarios (and per-scenario maps)
 
 **Scenarios can be switched without relaunching** (verified). The task generator re-reads `task.scenario.file`
-whenever it changes, and the next reset uses the new file: pedestrians, robot start and goal, and static
-obstacles (removed panels are deleted, new ones spawned). Nothing in Arena needs changing:
+whenever it changes, and the next reset uses the new file: pedestrians, robot start and goal, static obstacles
+(removed panels are deleted, new ones spawned) and, since our patch, the map. By hand:
 
 ```bash
 ros2 service call /task_generator_node/set_parameters rcl_interfaces/srv/SetParameters \
@@ -267,19 +267,45 @@ ros2 service call /task_generator_node/reset_task std_srvs/srv/Empty "{}"     # 
 ```
 (`ros2 param set` hung against the task generator; the service call works.)
 
-That saves ~1 min of launch per scenario, so 30 seeds × 5 templates can run in one launch per planner.
-**Not wired into the tools yet:**
-- the scheduler still does one scenario per launch;
-- the recorder writes the *launch* scenario into every episode's metadata.
+**The scheduler does it for you:** a job with `scenarios:` runs many scenarios in one launch, and the recorder
+labels every episode with the scenario that was actually applied (docs/12, "Batches" and "Which scenario an
+episode ran"). That saves ~1 min of launch per scenario, so 30 seeds × 5 templates is one launch per planner:
 
-Until both are updated, run one scenario per job:
 ```yaml
 jobs:
-  - {name: cc_s0_dwb,   planner: dwb,   world: campus, scenario: corridor_counterflow_s0.json, episodes: 3}
-  - {name: cc_s0_dsrnn, planner: dsrnn, world: campus, scenario: corridor_counterflow_s0.json, episodes: 3}
+  - {name: campus_dwb,   planner: dwb,   world: campus, scenarios: ["*_s*.json"], episodes_per_scenario: 3}
+  - {name: campus_dsrnn, planner: dsrnn, world: campus, scenarios: ["*_s*.json"], episodes_per_scenario: 3}
 ```
 
----
+### Per-scenario maps: telling Nav2 about the panels
+
+By default Nav2 plans on the world's `map.png`, which has no panels (§11). A scenario can carry its own map, the
+world map with its panels drawn in, so the very first global plan already goes through the real door:
+
+1. **In the generator**, after building a scenario dict and before writing it:
+   ```python
+   from scenario_maps import write_scenario_map          # scripts/scenario_maps.py
+   write_scenario_map(world_dir, "door_exit_s3", scenario)
+   # writes worlds/campus/map/scenario_maps/door_exit_s3.{png,yaml}  (same size/origin/resolution as map.png)
+   # and sets scenario["map"] = "scenario_maps/door_exit_s3.yaml"   (relative to worlds/<world>/map/)
+   ```
+   It rasterizes every `panel_x*`/`panel_y*` (and `cuboid`, with its odd SDF offset) of `obstacles.static` and
+   `obstacles.interactive`; unknown models are skipped with a warning. For existing files:
+   `uv run scripts/scenario_maps.py worlds/campus worlds/campus/scenarios/door_exit_s3.json` (in place).
+2. **Link and rebuild** like any new file (`--link`, then `colcon build --symlink-install --packages-select
+   arena_simulation_setup`). `link_into_arena()` links `map/scenario_maps/` too. Regenerating an already linked
+   map needs no rebuild.
+3. **At run time** (arena-rosnav patch): every reset reads the scenario once; if it has `"map"`, map_server loads
+   that file (resolved against the installed world's `map/`), and the task generator waits until the new map is
+   published *before* the robot is placed and the goal is sent; then the global costmap is cleared, so the static
+   layer and the planner use the new map. A scenario without `"map"` restores the world's `map.yaml`. Loading the
+   same world's map again doesn't respawn the Gazebo walls. If the named file is missing (not built), the log
+   says so and the world map is used; the recorder stores `map_loaded` so you can check.
+
+**Which condition do you want?** With `"map"`: an "up-to-date floor plan" (Nav2 knows the panels in advance).
+Without: an "unknown building" (panels discovered by lidar, phantom-gap replans). Since the global costmap is now
+cleared at every reset, both are well defined and independent of earlier episodes. DS-RNN follows the global path
+without seeing walls itself, so for DS-RNN in panel scenarios the map is close to mandatory.
 
 ## 10. Suggested order of work
 
@@ -303,29 +329,35 @@ One headless launch with DWB: 14 episodes, 4 scenarios switched live (hallway wo
 | Static obstacles kept correctly across resets? | **Yes.** Reused ones are moved, unused ones deleted; no duplicates after many resets; poses match the JSON |
 | Switch scenarios without relaunch? | **Yes** (§9) |
 | Cost of ~60 panels? | Negligible (§5) |
-| **Does Nav2 know about panels?** | **No.** See below |
+| Does Nav2 know about panels? | **Now yes, if the scenario has a `"map"`** (§9). Originally no; see below |
+| Global costmap independent of earlier episodes? | **Now yes** (cleared at every reset). Originally no |
 
-**Nav2 doesn't know about panels.** The global planner plans on `map.png`, and scenarios never change it. It only
-learns about a panel when the lidar sees it (~2.4 m away), then replans. In the door test the plan went straight
-through the panel wall until the robot was close, and twice it re-planned towards a *phantom* gap (part of the
-wall it hadn't seen yet) before finding the real door. DWB still got through every time (3/3), just 20–45% slower
-than a straight run.
+**Originally Nav2 didn't know about panels.** The global planner planned on `map.png`, and scenarios never changed
+it. It only learned about a panel when the lidar saw it (~2.4 m away), then replanned. In the door test the plan
+went straight through the panel wall until the robot was close, and twice it re-planned towards a *phantom* gap
+(part of the wall it hadn't seen yet) before finding the real door. DWB still got through every time (3/3), just
+20–45% slower than a straight run. And the global costmap was never cleared between episodes: lidar marks of
+panels from earlier episodes (even earlier scenarios) survived, which broke episode independence.
 
-Worse, **the global costmap is never cleared between episodes.** Lidar marks of panels from earlier episodes (even
-earlier scenarios) survive, so what the planner "knows" at the start of an episode depends on history. That breaks
-episode independence.
+**Both are fixed (arena-rosnav `lyu-lab`, 2026-10-11, docs/06):**
+1. **The global costmap is cleared at every reset** (`clear_entirely_global_costmap` right after the robot is
+   placed, next to upstream's local clear).
+2. **Per-scenario maps** (§9): `scripts/scenario_maps.py` rasterizes the panels; Arena loads the scenario's map
+   at the reset, before the robot is placed and the goal sent, and restores the world map for scenarios without one.
 
-Options, smallest first:
-1. **Clear the global costmap at every reset** (one service call in Arena's reset code;
-   `.../global_costmap/clear_entirely_global_costmap` was tested and works). Episodes become independent, but
-   every panel is still discovered by lidar: an "unknown building" condition.
-2. **Give Nav2 the real geometry:** the scenario generator also rasterizes its panels into a per-scenario map,
-   and Arena loads that map at reset (map_server already has a load-map service). An "up-to-date floor plan"
-   condition.
+Verified live in `school_hallway` (DWB, one launch, scenarios switched in place; a panel wall across the hallway
+at x = 10 with a 1.4 m door at y 8.3–9.7):
 
-Option 1 is a must before benchmarking. Option 2 is a design choice (which condition do you want to test?). It
-also matters only for planners that use the map: DS-RNN follows the global path but never sees walls itself, so a
-plan through a not-yet-seen panel steers it straight at the panel.
+| Episode | Scenario | Map served | First plan crosses the wall at | Outcome |
+|---|---|---|---|---|
+| 0 (first of the launch) | door with `"map"` | scenario map (door gap 8.3–9.7 in `/map` and the global costmap) | y = 8.63 (the door), and every one of its replans | success, 80 s |
+| 1 | no panels, no map | world map restored (848 panel cells gone) | no wall; lidar marks of ep. 0's panels gone from the costmap | (switched) |
+| 2 | same door, **no** `"map"` | world map | y = 6.0 (straight through the wall) until the lidar sees it | (switched) |
+| 3 | another door (x = 12, gap 2.0–3.4) with `"map"` | its scenario map | y = 3.04 (the door); the x = 10 marks seen in ep. 2 were cleared | success, 81 s |
+
+Over all stored plans: with `"map"`, 100% of them crossed the wall inside the door (88 and 104 plans per
+episode; no phantom-gap replans); without it, 78 of 110 went through the wall at y = 6. A scheduler run (3
+scenarios × 2 episodes in one launch, docs/12) gave 6/6 DWB successes with the same 100%.
 
 Other things to know when writing templates:
 - **Pedestrians have no path planning**, only social forces towards their next waypoint. Every waypoint must be
