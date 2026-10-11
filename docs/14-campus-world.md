@@ -112,7 +112,7 @@ looks wrong, `map.yaml`'s origin and `walls.yaml` disagree. Compare with `previe
 {
   "robots": [{"start": [2.0, 2.5, 0.0], "goal": [44.0, 48.0, 0.0]}],
   "obstacles": {
-    "static":  [{"name": "narrow_s_0", "model": "cuboid", "pos": [6.5, 0.0, 0.0]}, "..."],
+    "static":  [{"name": "panel_x4_0", "model": "panel_x4", "pos": [8.0, 0.1, 0.0]}, "..."],
     "dynamic": [{"name": "oncoming_0", "model": "actor1", "type": 1,
                  "pos": [12.3, 2.4, 0.0], "waypoints": [[4.1, 2.6, 0.0], [28.8, 2.2, 0.0]],
                  "desired_velocity": 1.2, "group_id": -1, "radius": 0.35, "goal_radius": 0.6,
@@ -122,8 +122,10 @@ looks wrong, `map.yaml`'s origin and `walls.yaml` disagree. Compare with `previe
   }
 }
 ```
-- `static`: models from `simulation-setup/entities/obstacles/static/<model>/`; `pos` = [x, y, yaw].
-  (⏳ panel details pending verification, §5.)
+- `static`: models from `simulation-setup/entities/obstacles/static/<model>/sdf/<model>.sdf`; `pos` = [x, y, yaw]
+  (yaw in radians). `obstacles.interactive` is treated exactly like `static`. A misspelt model doesn't crash
+  anything: Arena logs `Error spawning entity` and the obstacle is silently missing, so check the previews and
+  the launch log.
 - `dynamic`: HuNav pedestrians. The gotchas from [09 §3](09-hallway-scenarios.md):
   - `social_force_factor` defaults to 0, so people walk through each other: always set it;
   - `type` must be the integer 1;
@@ -137,16 +139,33 @@ You never write this by hand: `Builder` in `generate_campus_scenario.py` does (`
 
 ## 5. Panels: adjusting geometry per scenario
 
-`Builder.block_rect(x0, y0, x1, y1)` fills an axis-aligned rectangle with Arena's stock 1 × 1 × 2.2 m `cuboid`
-boxes, overlapping where needed. Rectangles may extend *into* walls, which is how you make a thin ledge along a
-wall (the worked example narrows the corridor this way).
+We added thin wall panels to simulation-setup (`entities/obstacles/static/panel_*`, commit `f03b9dd1` on `lyu-lab`):
 
-- **Narrow a corridor:** one rectangle along each long wall (see `corridor_counterflow`).
-- **Make a door of width w in the 5 m opening:** one rectangle on each side of the gap, about 1 m deep.
+| Model | Size (x × y × height) |
+|---|---|
+| `panel_x05`, `panel_x1`, `panel_x2`, `panel_x4` | 0.5 / 1 / 2 / 4 m × 0.2 m × 2 m (long along **x**) |
+| `panel_y05`, `panel_y1`, `panel_y2`, `panel_y4` | 0.2 m × 0.5 / 1 / 2 / 4 m × 2 m (long along **y**) |
 
-> ⏳ **Being verified now:** do HuNav pedestrians avoid spawned boxes? Does Nav2's global planner know about them
-> (they aren't in `map.png`)? How expensive are ~80 boxes? Would thin, long panel models be better? This section
-> will be updated with the answers.
+Origin = the centre of the footprint, on the floor. You rarely place them yourself; the `Builder` does:
+
+- `b.wall(x0, y0, x1, y1)` places a 0.2 m wall along a horizontal or vertical line, built from the longest panels
+  that fit (overlapping as needed).
+- `b.block_rect(x0, y0, x1, y1)` closes off a rectangle: its outline in panels, drawn just *inside* the rectangle
+  so the free space ends exactly at its edges.
+  - **Narrow a corridor:** a strip along each long wall (the worked example).
+  - **Make a door of width w:** one block on each side of the gap.
+
+Rules (verified live, see §11):
+- **Never rotate a panel** (`pos` yaw must be 0). HuNav uses the *unrotated* box, so a panel turned 90° acts on
+  pedestrians as a 4 m bar in the wrong direction. A probe pedestrian got stuck against such a phantom for whole
+  episodes. Use the `x` or `y` variant instead; `wall()` picks it for you.
+- **Name panels by model** (`panel_y4_3`, which `wall()` does). When you switch scenarios without relaunching
+  (§9), Arena only *moves* an obstacle whose name it already knows; it never re-spawns it. A name reused with a
+  different model keeps the *old* shape: in the test, a 4 m panel stayed where a 1.4 m door should have been, and
+  trapped two pedestrians.
+- **Doors ≥ 1.2 m.** 1.4 m was tested and works (pedestrians flowed both ways, ~10 traversals each per episode,
+  no jams). The Jackal is ~0.43 m wide, so try 1.2 m before going lower.
+- **Cost is negligible:** 60 panels changed nothing at real-time speed (RTF 0.98 → 0.99, Gazebo CPU unchanged).
 
 ---
 
@@ -237,15 +256,28 @@ separate task. Until then, use behaviour types 1 and 2 only.
 
 ## 9. Running many scenarios
 
-Each scenario is one launch with the scheduler ([12 § Batches](12-recording-and-playback.md)):
+**Scenarios can be switched without relaunching** (verified). The task generator re-reads `task.scenario.file`
+whenever it changes, and the next reset uses the new file: pedestrians, robot start and goal, and static
+obstacles (removed panels are deleted, new ones spawned). Nothing in Arena needs changing:
+
+```bash
+ros2 service call /task_generator_node/set_parameters rcl_interfaces/srv/SetParameters \
+  "{parameters: [{name: task.scenario.file, value: {type: 4, string_value: door_exit_s3.json}}]}"
+ros2 service call /task_generator_node/reset_task std_srvs/srv/Empty "{}"     # optional: switch right now
+```
+(`ros2 param set` hung against the task generator; the service call works.)
+
+That saves ~1 min of launch per scenario, so 30 seeds × 5 templates can run in one launch per planner.
+**Not wired into the tools yet:**
+- the scheduler still does one scenario per launch;
+- the recorder writes the *launch* scenario into every episode's metadata.
+
+Until both are updated, run one scenario per job:
 ```yaml
 jobs:
   - {name: cc_s0_dwb,   planner: dwb,   world: campus, scenario: corridor_counterflow_s0.json, episodes: 3}
   - {name: cc_s0_dsrnn, planner: dsrnn, world: campus, scenario: corridor_counterflow_s0.json, episodes: 3}
 ```
-> ⏳ **Being verified now:** whether Arena can switch scenario files *between episodes without relaunching*. If
-> it can, the scheduler will get a "list of scenarios per launch" mode, which saves ~1 min of startup per
-> scenario.
 
 ---
 
@@ -257,3 +289,49 @@ jobs:
 4. `gauntlet`.
 5. Generate ~10 seeds per template and do a small pilot with DWB and DS-RNN (scheduler + a copy of the
    first-experiment notebook).
+
+---
+
+## 11. What we verified (2026-10-11), and what's still open
+
+One headless launch with DWB: 14 episodes, 4 scenarios switched live (hallway world, panels across it as a
+1.4 m door, 6 pedestrians through the door, a 60-panel cost test).
+
+| Question | Answer |
+|---|---|
+| Pedestrians avoid panels? | **Yes**, as long as panels aren't rotated. No pedestrian ever inside a panel; bodies may brush door frames by ~0.2 m |
+| Static obstacles kept correctly across resets? | **Yes.** Reused ones are moved, unused ones deleted; no duplicates after many resets; poses match the JSON |
+| Switch scenarios without relaunch? | **Yes** (§9) |
+| Cost of ~60 panels? | Negligible (§5) |
+| **Does Nav2 know about panels?** | **No.** See below |
+
+**Nav2 doesn't know about panels.** The global planner plans on `map.png`, and scenarios never change it. It only
+learns about a panel when the lidar sees it (~2.4 m away), then replans. In the door test the plan went straight
+through the panel wall until the robot was close, and twice it re-planned towards a *phantom* gap (part of the
+wall it hadn't seen yet) before finding the real door. DWB still got through every time (3/3), just 20–45% slower
+than a straight run.
+
+Worse, **the global costmap is never cleared between episodes.** Lidar marks of panels from earlier episodes (even
+earlier scenarios) survive, so what the planner "knows" at the start of an episode depends on history. That breaks
+episode independence.
+
+Options, smallest first:
+1. **Clear the global costmap at every reset** (one service call in Arena's reset code;
+   `.../global_costmap/clear_entirely_global_costmap` was tested and works). Episodes become independent, but
+   every panel is still discovered by lidar: an "unknown building" condition.
+2. **Give Nav2 the real geometry:** the scenario generator also rasterizes its panels into a per-scenario map,
+   and Arena loads that map at reset (map_server already has a load-map service). An "up-to-date floor plan"
+   condition.
+
+Option 1 is a must before benchmarking. Option 2 is a design choice (which condition do you want to test?). It
+also matters only for planners that use the map: DS-RNN follows the global path but never sees walls itself, so a
+plan through a not-yet-seen panel steers it straight at the panel.
+
+Other things to know when writing templates:
+- **Pedestrians have no path planning**, only social forces towards their next waypoint. Every waypoint must be
+  in line of sight of the previous one, so put a waypoint on both sides of each door, and none behind panels or
+  deep in dead ends.
+- **Robot start and goal aren't checked against panels.** Keep them clear yourself.
+- **Shell walls must be axis-aligned** (HuNav turns every `walls.yaml` segment into a horizontal or vertical box).
+- The global map is 1100 × 1080 cells at 0.05 m for this campus. Fine, but use 0.1 m (`-r 0.1`) if you make it
+  much bigger.

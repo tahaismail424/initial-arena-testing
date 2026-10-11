@@ -41,8 +41,12 @@ from PIL import Image  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from generate_hallway import REPO_ROOT, link_into_arena  # noqa: E402
 
-PANEL_MODEL = "cuboid"   # Arena's stock static model: a 1 x 1 x 2.2 m box (entities/obstacles/static/cuboid).
-PANEL_SIZE = 1.0         # its footprint edge (m). See block_rect().
+# Thin wall panels for per-scenario geometry (simulation-setup/entities/obstacles/static/panel_*; docs/14 §5):
+# 0.2 m thick, 2 m tall, origin at the footprint centre. panel_x<L> is L m long along x, panel_y<L> along y.
+# NEVER rotate a panel (pos yaw must stay 0): the HuNav plugin uses the UNROTATED box, so a rotated panel
+# becomes a phantom obstacle that traps pedestrians. Pick the x or y variant instead (wall() does).
+PANEL_THICKNESS = 0.2
+PANEL_LENGTHS = {4.0: "4", 2.0: "2", 1.0: "1", 0.5: "05"}      # length (m) -> model name suffix
 
 
 # ============================================================================================ building blocks
@@ -117,27 +121,48 @@ class Builder:
         g, self.next_group = self.next_group, self.next_group + 1
         return g
 
-    def block_rect(self, x0, y0, x1, y1, tag="panel"):
-        """Fill the axis-aligned rectangle with static boxes (geometry adjustments: narrow a corridor, make a
-        door). The stock `cuboid` is 1 x 1 m, so the rectangle is covered by a grid of boxes that may overlap;
-        a side shorter than 1 m gets one box centred on it, i.e. the box sticks out ~equally on both sides. To
-        make a thin ledge along a wall, extend the rectangle INTO the wall (boxes may overlap walls).
-        TODO(after verification, docs/14 §5): may switch to dedicated thin panel models."""
-        def centres(a, b):
-            n = max(1, math.ceil((b - a) / PANEL_SIZE - 1e-9))
-            if n == 1:
-                return [(a + b) / 2]
-            step = (b - a - PANEL_SIZE) / (n - 1)
-            return [a + PANEL_SIZE / 2 + i * step for i in range(n)]
-        for cx in centres(x0, x1):
-            for cy in centres(y0, y1):
-                self.static.append({"name": f"{tag}_{len(self.static)}", "model": PANEL_MODEL,
-                                    "pos": [round(cx, 3), round(cy, 3), 0.0]})
+    def wall(self, x0, y0, x1, y1):
+        """A thin wall (0.2 m) along the axis-aligned line (x0, y0) -> (x1, y1), centred on it, built from panels.
+        Long walls use 4 m panels, short ones shorter panels; panels may overlap (and may overlap shell walls)."""
+        horizontal = abs(x1 - x0) >= abs(y1 - y0)
+        if abs(x1 - x0) > 1e-6 and abs(y1 - y0) > 1e-6:
+            raise ValueError("wall() must be horizontal or vertical (panels can't be rotated)")
+        a, c = (min(x0, x1), max(x0, x1)) if horizontal else (min(y0, y1), max(y0, y1))
+        length = max(c - a, 0.5)
+        size = max([L for L in PANEL_LENGTHS if L <= length] or [0.5])
+        n = math.ceil(length / size - 1e-9)
+        model = f"panel_{'x' if horizontal else 'y'}{PANEL_LENGTHS[size]}"
+        centres = [(a + c) / 2] if n == 1 else [a + size / 2 + i * (c - a - size) / (n - 1) for i in range(n)]
+        for m in centres:
+            x, y = (m, y0) if horizontal else (x0, m)
+            # Name by MODEL: across scenario switches Arena only moves an obstacle whose name it already knows,
+            # it never re-spawns it, so a name reused with a different model would keep the old geometry.
+            k = sum(o["model"] == model for o in self.static)
+            self.static.append({"name": f"{model}_{k}", "model": model, "pos": [round(x, 3), round(y, 3), 0.0]})
 
-    def jitter(self, pt, amount=0.4):
+    def block_rect(self, x0, y0, x1, y1):
+        """Block off the axis-aligned rectangle (nobody can enter it): its outline in panels, drawn just INSIDE
+        the rectangle so the free space ends exactly at its edges. Use it to narrow a corridor (a strip along a
+        wall) or to make a door (one block on each side of the gap). A rectangle thinner than one panel (0.2 m)
+        becomes a single wall. Blocks may overlap the shell walls."""
+        t = PANEL_THICKNESS / 2
+        if x1 - x0 <= PANEL_THICKNESS:
+            self.wall((x0 + x1) / 2, y0, (x0 + x1) / 2, y1)
+        elif y1 - y0 <= PANEL_THICKNESS:
+            self.wall(x0, (y0 + y1) / 2, x1, (y0 + y1) / 2)
+        else:
+            self.wall(x0, y0 + t, x1, y0 + t)          # bottom
+            self.wall(x0, y1 - t, x1, y1 - t)          # top
+            self.wall(x0 + t, y0, x0 + t, y1)          # left
+            self.wall(x1 - t, y0, x1 - t, y1)          # right
+
+    def jitter(self, pt, amount=0.4, axis="xy"):
         """Random offset so no two pedestrians aim at exactly the same waypoint (they would overlap: Arena
-        hard-codes HuNav's goal force to 20, much stronger than the social force)."""
-        return (pt[0] + self.rng.uniform(-amount, amount), pt[1] + self.rng.uniform(-amount, amount))
+        hard-codes HuNav's goal force to 20, much stronger than the social force). axis="x" or "y" jitters only
+        along that axis, e.g. along a corridor, so lanes don't drift into its walls."""
+        dx = self.rng.uniform(-amount, amount) if "x" in axis else 0.0
+        dy = self.rng.uniform(-amount, amount) if "y" in axis else 0.0
+        return (pt[0] + dx, pt[1] + dy)
 
     def scenario(self):
         if self.robot is None:
@@ -165,8 +190,8 @@ def corridor_counterflow(campus, b, p):
     gap = min(p["width"], (y1 - y0) - 0.2)
     side = ((y1 - y0) - gap) / 2                                   # how much each side gets narrowed
     if side > 0.05:
-        b.block_rect(narrow_x0, y0 - 0.5, narrow_x1, y0 + side, tag="narrow_s")    # extends into the wall:
-        b.block_rect(narrow_x0, y1 - side, narrow_x1, y1 + 0.5, tag="narrow_n")    # see block_rect()
+        b.block_rect(narrow_x0, y0, narrow_x1, y0 + side)        # a strip along the south wall
+        b.block_rect(narrow_x0, y1 - side, narrow_x1, y1)        # ... and along the north wall
 
     b.set_robot(campus.anchor("corridor_west"), campus.anchor("corridor_east"))
 
@@ -175,13 +200,13 @@ def corridor_counterflow(campus, b, p):
         speed = b.rng.uniform(*p["speed"])
         y = b.rng.uniform(lane_lo, lane_hi) if lane_hi > lane_lo else mid
         start = (b.rng.uniform(narrow_x0, x1 - 6.0), y)               # spread along the corridor
-        route = [b.jitter((narrow_x0 - 2.0, y)), b.jitter((x1 - 6.0, y))]   # -x first, then back
+        route = [b.jitter((narrow_x0 - 2.0, y), axis="x"), b.jitter((x1 - 6.0, y), axis="x")]   # -x, then back
         b.add_pedestrian("oncoming", start, route, speed)
     for i in range(p["n_with"]):
         speed = b.rng.uniform(*p["speed"])
         y = b.rng.uniform(lane_lo, lane_hi) if lane_hi > lane_lo else mid
         start = (b.rng.uniform(narrow_x0 + 2.0, narrow_x1), y)
-        route = [b.jitter((x1 - 6.0, y)), b.jitter((narrow_x0 - 2.0, y))]   # +x first
+        route = [b.jitter((x1 - 6.0, y), axis="x"), b.jitter((narrow_x0 - 2.0, y), axis="x")]   # +x first
         b.add_pedestrian("with_robot", start, route, speed)
 
 
@@ -193,8 +218,9 @@ def door_exit(campus, b, p):
     Crowd: p["n_exiting"] people starting in the plaza near the door, walking out through the door into the riser,
     then back (cyclic). Most should be in the plaza when the robot arrives: start them spread over the plaza's
     southern part. Optional: a few people waiting/standing near the door (a route with two very close points).
-    Watch for: HuNav pedestrians and the door's corners (pedestrians may get stuck on the panels' corners: put a
-    waypoint exactly in the door's centre, like DOOR_FRACTION in generate_scenario.py).
+    Watch for: pedestrians have NO path planning (social force only): give them a waypoint on BOTH sides of the
+    door, each in line of sight of the next. Keep the door >= 1.2 m (only 1.4 m was tested; the Jackal's real width
+    makes 1.2 m tight).
     """
     raise NotImplementedError("TODO: door_exit (docs/14 §6.2)")
 
@@ -285,10 +311,12 @@ def save_preview(scenario, world_dir, out_png, title):
     extent = [ox, ox + img.width * m["resolution"], oy, oy + img.height * m["resolution"]]
     fig, ax = plt.subplots(figsize=(12, 6))
     ax.imshow(img, cmap="gray", extent=extent, origin="upper")
+    sizes = {f"panel_{ax_}{suf}": (L, PANEL_THICKNESS) if ax_ == "x" else (PANEL_THICKNESS, L)
+             for L, suf in PANEL_LENGTHS.items() for ax_ in "xy"}
     for s in scenario["obstacles"]["static"]:
         x, y = s["pos"][:2]
-        ax.add_patch(plt.Rectangle((x - PANEL_SIZE / 2, y - PANEL_SIZE / 2), PANEL_SIZE, PANEL_SIZE,
-                                   color="saddlebrown", alpha=0.6))
+        w, h = sizes.get(s["model"], (1.0, 1.0))
+        ax.add_patch(plt.Rectangle((x - w / 2, y - h / 2), w, h, color="saddlebrown", alpha=0.8))
     classes = sorted({a["class"] for a in scenario["obstacles"]["dynamic"]})
     colors = dict(zip(classes, plt.cm.tab10.colors))
     for a in scenario["obstacles"]["dynamic"]:
