@@ -1,0 +1,50 @@
+[02:47:20] 2 job(s) -> /home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data   (rough ETA 2.1 h, longer if episodes time out)
+    dsrnn            dsrnn     20 episodes  hallway_tame.json  
+    dwb              dwb       20 episodes  hallway_tame.json  
+[02:47:20] dsrnn: launching (20 episodes): --headless --record=/home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data school_hallway scenario scenario:=hallway_tame.json local_planner:=dsrnn
+[02:47:25] dsrnn: recording into /home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data/20261011-024722_dsrnn_hallway_tame
+[02:49:10] dsrnn: 1/20 episodes done, ~24 min left
+[02:50:25] dsrnn: 2/20 episodes done, ~23 min left
+[02:51:40] dsrnn: 3/20 episodes done, ~21 min left
+[02:52:55] dsrnn: 4/20 episodes done, ~20 min left
+[02:54:10] dsrnn: 5/20 episodes done, ~19 min left
+[02:55:25] dsrnn: 6/20 episodes done, ~18 min left
+[02:56:40] dsrnn: 7/20 episodes done, ~16 min left
+[02:57:40] dsrnn: 8/20 episodes done, ~15 min left
+[02:59:10] dsrnn: 9/20 episodes done, ~14 min left
+[03:00:25] dsrnn: 10/20 episodes done, ~13 min left
+[03:01:26] dsrnn: 11/20 episodes done, ~11 min left
+[03:02:56] dsrnn: 12/20 episodes done, ~10 min left
+[03:04:11] dsrnn: 13/20 episodes done, ~9 min left
+[03:05:26] dsrnn: 14/20 episodes done, ~8 min left
+[03:15:26] dsrnn: 15/20 episodes done, ~9 min left
+[03:16:41] dsrnn: 16/20 episodes done, ~7 min left
+[03:17:56] dsrnn: 17/20 episodes done, ~5 min left
+[03:18:56] dsrnn: 18/20 episodes done, ~3 min left
+[03:20:11] dsrnn: 19/20 episodes done, ~2 min left
+[03:21:27] dsrnn: 20 episodes complete
+[03:21:35] dsrnn: complete, 20 episodes, 34.1 min
+[03:21:45] dwb: launching (20 episodes): --headless --record=/home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data school_hallway scenario scenario:=hallway_tame.json local_planner:=dwb
+[03:21:50] dwb: recording into /home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data/20261011-032147_dwb_hallway_tame
+[03:26:50] dwb: 1/20 episodes done, ~86 min left
+[03:31:05] dwb: 2/20 episodes done, ~79 min left
+[03:35:20] dwb: 3/20 episodes done, ~74 min left
+[03:39:51] dwb: 4/20 episodes done, ~70 min left
+[03:44:06] dwb: 5/20 episodes done, ~65 min left
+[03:48:21] dwb: 6/20 episodes done, ~61 min left
+[03:52:36] dwb: 7/20 episodes done, ~56 min left
+[03:56:52] dwb: 8/20 episodes done, ~52 min left
+[04:01:22] dwb: 9/20 episodes done, ~48 min left
+[04:05:37] dwb: 10/20 episodes done, ~43 min left
+[04:09:52] dwb: 11/20 episodes done, ~39 min left
+[04:14:23] dwb: 12/20 episodes done, ~35 min left
+[04:18:38] dwb: 13/20 episodes done, ~30 min left
+[04:22:53] dwb: 14/20 episodes done, ~26 min left
+[04:27:23] dwb: 15/20 episodes done, ~22 min left
+[04:31:39] dwb: 16/20 episodes done, ~17 min left
+[04:35:54] dwb: 17/20 episodes done, ~13 min left
+[04:40:24] dwb: 18/20 episodes done, ~9 min left
+[04:44:39] dwb: 19/20 episodes done, ~4 min left
+[04:49:10] dwb: 20 episodes complete
+[04:49:18] dwb: complete, 20 episodes, 87.4 min
+[04:49:28] all jobs done; manifest: /home/tahaismail/Documents/Lyu_Lab/initial-arena-testing/first_experiment/data/batch_manifest.json

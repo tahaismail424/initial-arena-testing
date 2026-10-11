@@ -27,6 +27,7 @@ SKIP_START = 1.0          # s ignored at the episode start (reset artifacts, rob
 FREEZE_SPEED = 0.05       # m/s: slower than this counts as standing still
 FREEZE_MIN = 1.0          # s: a stop must last at least this long to count as a freeze
 TTC_DANGER = 1.0          # s: a time-to-collision below this counts as an imminent collision
+CROWD_DIST = 2.0          # m clearance: a freeze with a pedestrian closer than this is a "crowd freeze"
 # Proxemic zones (Hall, 1966), applied to the clearance between robot and pedestrian bodies:
 ZONES = [("contact", -np.inf, 0.0), ("intimate", 0.0, 0.45), ("personal", 0.45, 1.2), ("social", 1.2, 3.6)]
 
@@ -98,12 +99,15 @@ def min_ttc(ep, human_radius: float | None = None) -> pd.Series:
 
 def freezes(ep, speed: float = FREEZE_SPEED, min_duration: float = FREEZE_MIN) -> pd.DataFrame:
     """Intervals where the robot stood still (speed < `speed`) for at least `min_duration` s while NOT at the goal.
-    One row per freeze: t_rel start, duration, position, and the nearest pedestrian clearance at the start (a freeze
-    next to people is the classic "freezing robot problem"; one far from people is something else, e.g. a planner
-    failure)."""
+    Only stops AFTER the robot first started moving count: after a reset the robot waits ~1-2 s for Nav2's plan,
+    which is not a freeze. One row per freeze: t_rel start, duration, position, nearest pedestrian clearance at the
+    start, and `near_people` (clearance < CROWD_DIST). A freeze next to people is the classic "freezing robot
+    problem"; one far from people is something else (e.g. pinned against a wall, a planner failure)."""
     r = ep.robot
     tol = float(ep.meta.get("goal_tolerance") or 0.5)
-    still = (r["speed"] < speed) & (r["goal_dist"] > tol) & (r["t_rel"] >= SKIP_START)
+    moving = r["speed"] >= speed
+    started = moving.cummax()                          # True from the first moment the robot moved
+    still = (r["speed"] < speed) & (r["goal_dist"] > tol) & started
     rows = []
     groups = (still != still.shift()).cumsum()
     near = ep.distances().groupby("t")["clearance"].min()
@@ -114,7 +118,9 @@ def freezes(ep, speed: float = FREEZE_SPEED, min_duration: float = FREEZE_MIN) -
             rows.append({"t_rel": g["t_rel"].iloc[0], "duration": dur, "x": g["x"].iloc[0], "y": g["y"].iloc[0],
                          "nearest_clearance": float(near.iloc[near.index.get_indexer([t0], method="nearest")[0]])
                          if len(near) else np.nan})
-    return pd.DataFrame(rows, columns=["t_rel", "duration", "x", "y", "nearest_clearance"])
+    out = pd.DataFrame(rows, columns=["t_rel", "duration", "x", "y", "nearest_clearance"])
+    out["near_people"] = out["nearest_clearance"] < CROWD_DIST
+    return out
 
 
 def proxemics(ep, human_radius: float | None = None) -> dict:
@@ -124,7 +130,11 @@ def proxemics(ep, human_radius: float | None = None) -> dict:
         return {f"time_{name}": 0.0 for name, _, _ in ZONES}
     closest = dist.groupby("t")["clearance"].min()
     dt = _period(dist["t"])
-    return {f"time_{name}": float(((closest >= lo) & (closest < hi)).sum() * dt) for name, lo, hi in ZONES}
+    out = {f"time_{name}": float(((closest >= lo) & (closest < hi)).sum() * dt) for name, lo, hi in ZONES}
+    # the same as fractions of the episode: a slower robot spends more SECONDS near people just by taking longer
+    total = len(closest) * dt
+    out.update({f"frac_{name}": out[f"time_{name}"] / total if total else np.nan for name, _, _ in ZONES})
+    return out
 
 
 def smoothness(ep) -> dict:
@@ -169,6 +179,8 @@ def episode_metrics(ep, human_radius: float | None = None) -> dict:
         "n_freezes": len(fr),
         "freeze_time": float(fr["duration"].sum()) if len(fr) else 0.0,
         "froze": len(fr) > 0,
+        "crowd_freezes": int(fr["near_people"].sum()) if len(fr) else 0,
+        "froze_in_crowd": bool(fr["near_people"].any()) if len(fr) else False,
     })
     m.update(proxemics(ep, human_radius))
     m.update(smoothness(ep))
@@ -184,7 +196,7 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     p = k / n
     centre = (p + z * z / (2 * n)) / (1 + z * z / n)
     half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
-    return (centre - half, centre + half)
+    return (max(0.0, centre - half), min(1.0, centre + half))
 
 
 def bootstrap_ci(x, stat=np.mean, n_boot: int = 5000, seed: int = 0) -> tuple[float, float]:
@@ -198,9 +210,9 @@ def bootstrap_ci(x, stat=np.mean, n_boot: int = 5000, seed: int = 0) -> tuple[fl
     return tuple(np.percentile(boots, [2.5, 97.5]))
 
 
-RATES = ["success", "collided", "froze", "wall_collision"]
+RATES = ["success", "collided", "froze", "froze_in_crowd", "wall_collision"]
 MEANS = ["time_to_goal", "path_length", "path_efficiency", "mean_speed", "collisions", "min_clearance", "min_ttc",
-         "time_ttc_danger", "time_intimate", "time_personal", "freeze_time", "mean_abs_jerk", "heading_per_m",
+         "time_ttc_danger", "time_intimate", "time_personal", "frac_intimate", "frac_personal", "freeze_time", "mean_abs_jerk", "heading_per_m",
          "omega_flips_per_min"]
 
 

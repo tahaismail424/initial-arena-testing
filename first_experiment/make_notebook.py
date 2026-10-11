@@ -36,8 +36,9 @@ planner:
 2. **Asymmetric perception (on purpose).** DS-RNN gets every pedestrian's exact position from HuNav; DWB only sees
    people as lidar obstacles in its costmap.
 3. **Different speed limits.** DWB's own config caps it at 0.26 m/s, DS-RNN at 1.0 m/s. Time-to-goal mostly reflects that.
-4. **Pedestrians ignore the robot.** HuNav's people don't see the robot, so they never yield. Every contact is the
-   robot failing to get out of the way (or being run into while standing still).
+4. **Pedestrians treat the robot as an obstacle, not as a person.** HuNav's social force pushes them away from the
+   robot's body like from a wall, but they don't anticipate its motion, yield, or react socially (HuNav's robot
+   tracking is disabled). Fast walkers (the runners) can't avoid it in time.
 
 Everything below is computed from the recorded positions (`social_metrics.py`), identically for both planners.
 """)
@@ -98,7 +99,8 @@ md("""
 | `min_ttc` | smallest **time-to-collision**: if everyone kept their velocity, how many seconds until a contact. Below ~1 s is dangerous |
 | `time_ttc_danger` | seconds with TTC < 1 s (imminent-collision situations, even if they were resolved) |
 | `time_intimate` / `time_personal` | seconds with the closest pedestrian in the intimate (< 0.45 m) / personal (0.45–1.2 m) zone |
-| `n_freezes`, `freeze_time` | robot standing still (< 0.05 m/s for ≥ 1 s) before reaching the goal |
+| `n_freezes`, `freeze_time` | robot standing still (< 0.05 m/s for ≥ 1 s) after it first started moving, before reaching the goal |
+| `froze_in_crowd` | at least one of those freezes happened with a pedestrian within 2 m (the "freezing robot problem") |
 | `mean_abs_jerk` | average jerk (m/s³), how abrupt the speed changes are |
 | `heading_per_m` | total turning per metre driven (rad/m), "path irregularity" |
 | `omega_flips_per_min` | how often the turn command switches direction per minute: weaving / oscillation |
@@ -107,7 +109,7 @@ md("""
 code("""
 table = pd.DataFrame([{**sm.episode_metrics(ep), "planner": p} for p, eps in episodes.items() for ep in eps])
 cols = ["planner", "episode", "outcome", "time_to_goal", "path_efficiency", "collisions", "min_clearance", "min_ttc",
-        "time_ttc_danger", "time_intimate", "n_freezes", "freeze_time", "mean_abs_jerk", "omega_flips_per_min"]
+        "time_ttc_danger", "frac_intimate", "n_freezes", "froze_in_crowd", "mean_abs_jerk", "omega_flips_per_min"]
 table[cols]
 """)
 
@@ -206,13 +208,13 @@ md("""
 
 Even without contact, passing within ~0.45 m of someone (their *intimate* zone) is uncomfortable, and 0.45–1.2 m
 (*personal* zone) is where people expect only acquaintances. Social-navigation papers report time or fraction of
-time in these zones. Faster robots spend less time near people simply because they spend less time in total, so
-also compare the zone time to the episode duration.
+time in these zones. Faster robots spend fewer *seconds* near people simply because they finish sooner, so the
+fair comparison is the **fraction** of the episode (`frac_*` columns).
 """)
 
 code("""
 plots.proxemic_bars(table)
-table.groupby("planner")[["time_contact", "time_intimate", "time_personal", "time_social", "duration"]].mean()
+table.groupby("planner")[["frac_contact", "frac_intimate", "frac_personal", "frac_social", "duration"]].mean()
 """)
 
 md("""
@@ -220,14 +222,16 @@ md("""
 
 The **freezing robot problem**: in dense crowds, planners often decide every option is unsafe and stop. In
 the real world that causes deadlocks, because people expect the robot to move. Here a freeze is ≥ 1 s below
-0.05 m/s before the goal. A freeze far from any pedestrian means something else went wrong (e.g. a planning
-failure or a wall).
+0.05 m/s before the goal, counted only after the robot first started moving (after each reset the robot waits
+~1–2 s for Nav2's first plan; that is not a freeze). `near_people` marks freezes with a pedestrian within 2 m. A
+freeze far from everyone means something else went wrong (e.g. pinned against a wall, or a planning failure).
 """)
 
 code("""
 fr = pd.concat([sm.freezes(ep).assign(planner=p, episode=ep.meta["episode"])
                 for p, eps in episodes.items() for ep in eps], ignore_index=True)
-print("episodes with a freeze:", table.groupby("planner")["froze"].sum().to_dict())
+print("episodes with a freeze:", table.groupby("planner")["froze"].sum().to_dict(),
+      "  of which near people:", table.groupby("planner")["froze_in_crowd"].sum().to_dict())
 fr
 """)
 
@@ -316,9 +320,45 @@ ep.plot(42.0)                    # one frame, 42 s into the episode
 """)
 
 md("""
-## 11. Takeaways
+## 11. Takeaways (run of 2026-10-11)
 
-*(Filled in after looking at the results above. See the end of the notebook run.)*
+**Task.** DS-RNN succeeded 19/20, DWB 20/20.
+- DS-RNN's one failure is the **end-wall trap**: it passed ~0.5 m beside the goal (tolerance 0.25 m), overshot
+  towards the wall 1 m behind it, and the collision monitor blocked every command, including turning away. Pinned
+  for 529 s until the timeout.
+- DS-RNN is 3.6× faster (71 s vs 256 s). That's mostly the speed limits (1.0 vs 0.26 m/s), not planning quality.
+- DWB drives straighter (path efficiency 0.96 vs 0.89). **Its speed is flat at ~0.23 m/s along the whole hallway** (speed profile): it never slows down for anyone, only steers a little. DS-RNN brakes at encounters and most of its episodes share a large northward detour around x = 20–28 m (path overlay).
+
+**Safety.** Both had contacts in **6/20 episodes (30%)**, the same rate.
+- **Every contact was with one of the two runners** (2.7 m/s), and in every one the robot was moving towards the
+  runner.
+- Nothing else in this scenario ever touched the robot. The runners are about twice as fast as anything in DS-RNN's
+  training (0.5–1.5 m/s), and they close distance faster than DWB's lidar-costmap loop reacts.
+- Minimum clearance and TTC are statistically indistinguishable between planners.
+
+**Comfort.** DWB spends **16% of its time with someone in their intimate zone** (< 0.45 m) vs DS-RNN's 7%, and
+24% vs 13% in the personal zone (both p < 10⁻⁶).
+- DWB treats people as costmap obstacles and only avoids what is about to be lethal. It holds its line and lets
+  people pass close.
+- DS-RNN actively keeps distance, even though it is 4× faster.
+
+**Smoothness.** DS-RNN pays for that with motion quality: 81 turn-direction flips per minute vs 11, 2.5× the jerk,
+and 1.7× the turning per metre. That's the bang-bang steering visible in the videos.
+
+**Freezing.** Essentially none.
+- DWB never stopped.
+- DS-RNN had one 2.6 s freeze next to a person; its other two stops were the wall trap and a brief stop far from
+  anyone.
+
+**What this says about the scenario.** It confirms the hunch that this hallway is too easy to discriminate
+planners:
+- The wide hallway leaves room to swerve, so nobody ever *has* to wait, and nothing provokes freezing.
+- The only safety-relevant event type is "runner versus robot".
+- Repeating one scenario gives very tight intervals (DWB time to goal 255–258 s), so differences look precise even
+  though they only describe this one replayed scene.
+
+Next scenarios should force interaction: narrow corridors, bottlenecks, blocking agents, people who react to the
+robot. And they should vary between episodes.
 """)
 
 md("""
