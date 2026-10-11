@@ -1,5 +1,43 @@
+diff --git a/configs/nav2/controllers/crowdnav/controller_config.yaml b/configs/nav2/controllers/crowdnav/controller_config.yaml
+index 5e6e38c9..9d82ca2b 100644
+--- a/configs/nav2/controllers/crowdnav/controller_config.yaml
++++ b/configs/nav2/controllers/crowdnav/controller_config.yaml
+@@ -1,3 +1,5 @@
++# initial-arena-testing: PaS-CrowdNav was trained with env.time_step = 0.25 s -> query it at 4 Hz
++controller_frequency: 4.0
+ controller_plugins:
+   - FollowPath
+ controller_plugins_dict:
+diff --git a/configs/nav2/controllers/dsrnn/controller_config.yaml b/configs/nav2/controllers/dsrnn/controller_config.yaml
+new file mode 100644
+index 00000000..ed4b2cbb
+--- /dev/null
++++ b/configs/nav2/controllers/dsrnn/controller_config.yaml
+@@ -0,0 +1,7 @@
++# initial-arena-testing: DS-RNN (nav2py_dsrnn_controller). Trained with env.time_step = 0.1 s -> query it at 10 Hz.
++controller_frequency: 10.0
++controller_plugins:
++  - FollowPath
++controller_plugins_dict:
++  FollowPath:
++    plugin: "nav2py_dsrnn_controller::DSRNNController"
+diff --git a/configs/nav2/model_params.yaml b/configs/nav2/model_params.yaml
+index b2c8a86f..450ea3fa 100644
+--- a/configs/nav2/model_params.yaml
++++ b/configs/nav2/model_params.yaml
+@@ -33,4 +33,8 @@ planner_plugins_dict:
+ footprint: "[ [0.1, 0.1], [0.1, -0.1], [-0.1, -0.1], [-0.1, 0.1] ]"
+ 
+ robot_base_frame: 'base_link'
+-robot_odom_frame: 'odom'
+\ No newline at end of file
++robot_odom_frame: 'odom'
++
++# initial-arena-testing: Nav2 controller_server rate (Hz). Upstream hard-coded 1.0 in nav2.yaml; now overridable
++# per planner in controllers/<name>/controller_config.yaml. Must stay a float (not a quoted string).
++controller_frequency: 1.0
 diff --git a/configs/nav2/nav2.yaml b/configs/nav2/nav2.yaml
-index 14f55768..5d6fdff9 100644
+index 14f55768..6e68315a 100644
 --- a/configs/nav2/nav2.yaml
 +++ b/configs/nav2/nav2.yaml
 @@ -47,6 +47,10 @@ bt_navigator:
@@ -13,6 +51,55 @@ index 14f55768..5d6fdff9 100644
      groot_zmq_server_port: 1667
      action_server_timeout: 0.0
      retry_max: 5
+@@ -64,7 +68,9 @@ bt_navigator_rclcpp_node:
+ controller_server:
+   ros__parameters:
+     use_sim_time: True
+-    controller_frequency: 1.0
++    # initial-arena-testing: per-planner rate. Default 1.0 is set in configs/nav2/model_params.yaml; a planner's
++    # controller_config.yaml can override it (e.g. PaS-CrowdNav was trained with 0.25 s steps -> 4.0).
++    controller_frequency: ${controller_frequency}
+     min_x_velocity_threshold: 0.001
+     min_y_velocity_threshold: 0.5
+     min_theta_velocity_threshold: 0.001
+@@ -83,7 +89,11 @@ controller_server:
+     goal_checker:
+       plugin: "nav2_controller::SimpleGoalChecker"
+       xy_goal_tolerance: 0.25
+-      yaw_goal_tolerance: 0.25
++      # initial-arena-testing: was 0.25. Success now means reaching the goal POSITION, as in the crowd-nav
++      # literature (DS-RNN, CrowdNav++ end an episode within ~0.3 m regardless of heading). With 0.25 rad, learned
++      # policies that never learned a final heading circle around the goal (DS-RNN ran into the end wall).
++      # pi accepts any heading. Put 0.25 back to require the final heading for every planner.
++      yaw_goal_tolerance: 3.1416
+       stateful: True
+ 
+     controller_plugins: ${controller_plugins}
+@@ -245,6 +255,24 @@ recoveries_server:
+     min_rotational_vel: 0.4
+     rotational_acc_lim: 3.2
+ 
++# initial-arena-testing: Nav2 launches a velocity_smoother between the controller (cmd_vel_nav) and the robot,
++# but Arena never configured it, so it ran with Nav2's defaults: max 0.5 m/s and 2.5 rad/s. That silently halved
++# any planner that commands more (DS-RNN asks for 1.0 m/s). Limits are now the Jackal's real hardware limits
++# (entities/robots/jackal/control.yaml): the smoother only stops physically impossible commands, and each
++# controller keeps enforcing its own limits (e.g. DWB's 0.26 m/s). Adjust if you use another robot.
++velocity_smoother:
++  ros__parameters:
++    use_sim_time: True
++    smoothing_frequency: 20.0
++    scale_velocities: False
++    feedback: "OPEN_LOOP"
++    max_velocity: [2.0, 0.0, 4.0]
++    min_velocity: [-2.0, 0.0, -4.0]
++    max_accel: [20.0, 0.0, 25.0]
++    max_decel: [-20.0, 0.0, -25.0]
++    deadband_velocity: [0.0, 0.0, 0.0]
++    velocity_timeout: 1.0
++
+ collision_monitor:
+   ros__parameters:
+     base_frame_id: ${frame:-}${robot_base_frame:-base_link}
 diff --git a/entities/robots/jackal/mappings.yaml b/entities/robots/jackal/mappings.yaml
 index 6b4e42fb..e6eb0bf4 100644
 --- a/entities/robots/jackal/mappings.yaml

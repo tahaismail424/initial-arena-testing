@@ -22,6 +22,7 @@ These live in the upstream checkouts. A `git pull` / `vcs import` / reinstall co
 | `.../gazebo_simulator/gazebo_simulator.py` (`_generate_wall_sdf`), `.../human/hunav/hunav.py` (`plugin_entity`) | Wall visual/collision renamed `arena_wall_visual`/`arena_wall_collision` and added to the HuNav plugin's `<ignore_models>` | HuNav plugin bug: rotated wall boxes became phantom walls that trapped pedestrians ([09 §4](09-hallway-scenarios.md#4-pitfalls-we-hit-and-the-fix-in-the-generator)) |
 | `arena_bringup/launch/arena.launch.py`, `task_generator/launch/task_generator.launch.py` | New launch arg `rviz` (`true`/`false`); `false` also skips the RViz-only `pedestrian_marker_publisher` | Gazebo window without RViz ([09 §5](09-hallway-scenarios.md#5-performance-notes--running-faster-than-real-time)) |
 | `.../human/hunav/hunav.py` | HuNav plugin `update_rate` comment. Value kept at 1000 (unchanged behaviour). | See the hunav_gz_plugin row below |
+| `.../human/hunav/hunav.py` (`_remove_obstacles_impl`) | After a successful `delete_actors`, forget every pedestrian name so the next spawn creates fresh actors | **Upstream bug:** from episode 2 on there were no pedestrians, because the base class *moved* the deleted actors instead of spawning them ([13](13-pedestrian-reset-fix.md)) |
 | `arena_bringup/configs/task_generator.yaml` | `timeout: 600` (sim seconds) | Episodes end instead of hanging when the robot gets stuck. **Must be an integer**: Arena declares this param with default `-1`, and ROS 2 rejects a `600.0` (double) override, which crashes the task generator at startup. |
 
 ### simulation-setup (`~/arena_ws/src/arena/simulation-setup`)
@@ -46,6 +47,7 @@ These live in the upstream checkouts. A `git pull` / `vcs import` / reinstall co
 |---|---|---|
 | `src/HuNavSystemPlugin.cpp` `PreUpdate` | Commented out a leftover debug loop that logged every entity every step | Pure overhead |
 | same + `include/.../HuNavSystemPlugin.h` | `lastUpdate_` initialised to 0, and a negative `dt` never counts as "too soon" | **Bug in our first update_rate patch:** `lastUpdate_` was uninitialised, so on the CPU VM garbage made `dt` negative and the plugin skipped every step. Pedestrians stood still from episode 1 (found 2026-10-09). |
+| same (`deleteActorsCallback`) | Removes actors immediately (also not-yet-initialised ones) instead of on the next physics step | Closes a race where Arena's re-spawn could be rejected because the old actor with the same name still existed ([13](13-pedestrian-reset-fix.md)) |
 | same | `<update_rate>` is now honoured (steps are skipped below the rate) | Upstream parsed it but never used it. With the value at 1000 nothing changes; lower values speed the sim up but slowed pedestrians ([09 §5](09-hallway-scenarios.md#5-performance-notes--running-faster-than-real-time)) |
 
 See the current state any time with:

@@ -23,6 +23,7 @@ Arena's upstream docs describe older versions in places. When the docs and the c
 | 10 | [Learned planners](docs/10-learned-planners.md) | nav2py install, PaS-CrowdNav bring-up, planner build status, DS-RNN native-sim setup |
 | 11 | [DS-RNN native sim tour](docs/11-dsrnn-native-sim-tour.md) | Visualizing DS-RNN, what code actually runs, observation/action/reward, configurables, porting notes |
 | 12 | [Recording & playback](docs/12-recording-and-playback.md) | Record every episode to CSV (`--record`), file format, `arena_analysis` metrics API, video/notebook replay |
+| 13 | [Pedestrian reset fix](docs/13-pedestrian-reset-fix.md) | Why pedestrians vanished after episode 1, the two-repo fix, and how it was verified |
 
 ## Quick start
 

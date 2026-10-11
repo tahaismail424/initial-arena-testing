@@ -236,7 +236,7 @@ index cba43cd7..c724ed9d 100644
  
          while not self.check_map_server():
 diff --git a/task_generator/task_generator/simulators/human/hunav/hunav.py b/task_generator/task_generator/simulators/human/hunav/hunav.py
-index 92e51878..2e1475c2 100644
+index 92e51878..fc71c68b 100644
 --- a/task_generator/task_generator/simulators/human/hunav/hunav.py
 +++ b/task_generator/task_generator/simulators/human/hunav/hunav.py
 @@ -84,6 +84,10 @@ class _PedestrianHelper:
@@ -269,6 +269,23 @@ index 92e51878..2e1475c2 100644
          self._agents_container = Agents()  # Container to hold all registered agents
          self._get_agents_container = Agents()  # Container specifically just to send the Agent attributes to Hunavsystemplugin
          self._agents_container.header.frame_id = "map"
+@@ -524,6 +533,16 @@ class HunavHumanSimulator(DummyHumanSimulator):
+         if not success:
+             self._logger.error("Failed to delete  HuNav agents from ECM - continuing anyway")
+             # Don't return False - continue with deletion
++        else:
++            # initial-arena-testing: the plugin has just removed every pedestrian actor from Gazebo, so they must
++            # be spawned again. But BaseHumanSimulator.spawn_dynamic_obstacles() treats an obstacle it already
++            # knows (same name) as "still in the world": it only calls move_entity() on it (which fails, the entity
++            # is gone) and never spawn_entity(). Pedestrians therefore vanished after the first episode and the
++            # plugin waited forever for actors that never came back (0 agents in human_states in episode 2+).
++            # Forgetting them here makes the next spawn_dynamic_obstacles() spawn fresh actors at their scenario
++            # start poses. Only forget when the delete succeeded, otherwise we would spawn duplicates.
++            for agent in self._agents_container.agents:
++                self._known_obstacles.forget(name=agent.name)
+ 
+         # Phase 2: Clear local agents container
+         self._agents_container = Agents()
 diff --git a/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py b/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py
 index 56890073..7f665c2e 100644
 --- a/task_generator/task_generator/simulators/sim/gazebo_simulator/gazebo_simulator.py

@@ -1,8 +1,21 @@
 diff --git a/include/hunav_gz_plugin/HuNavSystemPlugin.h b/include/hunav_gz_plugin/HuNavSystemPlugin.h
-index ba6fe0d..173bb36 100644
+index ba6fe0d..caa98ae 100644
 --- a/include/hunav_gz_plugin/HuNavSystemPlugin.h
 +++ b/include/hunav_gz_plugin/HuNavSystemPlugin.h
-@@ -191,7 +191,7 @@ private:
+@@ -136,6 +136,12 @@ private:
+ 
+   std::vector<gz::sim::Entity> entities_to_delete_;
+   bool delete_requested_ = false;
++  // initial-arena-testing: ECM of the running simulation, so deleteActorsCallback can remove the actors right away
++  // (see the comment there). Only dereferenced inside ROS callbacks, which only run while Configure/PreUpdate spin
++  // rosnode_ on the simulation thread, i.e. while we are inside a system callback that owns this ECM.
++  gz::sim::EntityComponentManager* ecm_{nullptr};
++  // initial-arena-testing: names of all agents last received from get_agents (not only the initialised ones).
++  std::vector<std::string> agentNames_;
+   bool plugin_active_ = true;
+ 
+   //Wall struct and helper functions/variables
+@@ -191,7 +197,7 @@ private:
  
    /// Simulation Info
    //std::chrono::steady_clock::time_point lastUpdate_;
@@ -12,10 +25,96 @@ index ba6fe0d..173bb36 100644
    /// \brief Time of the last update.
    //gz::common::Time lastUpdate_;
 diff --git a/src/HuNavSystemPlugin.cpp b/src/HuNavSystemPlugin.cpp
-index c05aa57..2e6e508 100644
+index c05aa57..4975a35 100644
 --- a/src/HuNavSystemPlugin.cpp
 +++ b/src/HuNavSystemPlugin.cpp
-@@ -1620,10 +1620,12 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
+@@ -75,6 +75,7 @@ void HuNavSystemPluginIGN::Configure(const gz::sim::Entity& _entity, const std::
+   
+   (void)_eventMgr;
+   counter_ = 0;
++  ecm_ = &_ecm;  // initial-arena-testing: see deleteActorsCallback
+ 
+   if (!rclcpp::ok()) {
+     rclcpp::init(0, nullptr);
+@@ -357,6 +358,11 @@ void HuNavSystemPluginIGN::initializeAgents(gz::sim::EntityComponentManager& _ec
+     const hunav_msgs::msg::Agents agents = res.agents;
+     RCLCPP_DEBUG(this->rosnode_->get_logger(), "Received %i agents from service /get_agents", (int)agents.agents.size());                  // 15 AGENTS RECEIVED SO HERE EVERYTHING IS FINE !!!
+     pedestrians_.clear();
++    // initial-arena-testing: remember every agent name, so delete_actors can also remove actors that were
++    // spawned but not yet initialised (the loop below returns early on the first actor missing from the ECM).
++    agentNames_.clear();
++    for (const auto &agent : agents.agents)
++      agentNames_.push_back(agent.name);
+     pedLastTime_ = std::chrono::steady_clock::now();
+     rosPedLastTime_ = this->rosnode_->get_clock()->now();
+ 
+@@ -1097,24 +1103,49 @@ void HuNavSystemPluginIGN::deleteActorsCallback(
+     RCLCPP_INFO(this->rosnode_->get_logger(), "=== DELETE ACTORS CALLBACK CALLED ===");
+     
+     std::vector<gz::sim::Entity> actorsToDelete;
+-    
++
+     // Collect all pedestrian actors
+     for (const auto& [entity, agent] : pedestrians_) {
+         actorsToDelete.push_back(entity);
+         gzmsg << "Marking actor " << agent.name << " (entity: " << entity << ") for deletion" << std::endl;
+     }
+-    
++    // initial-arena-testing: also actors that exist but were not initialised yet (pedestrians_ can be partial).
++    // Arena re-spawns every pedestrian after this call, so a leftover actor would block its re-spawn (same name).
++    if (ecm_)
++    {
++      for (const auto& name : agentNames_)
++      {
++        auto entity = ecm_->EntityByComponents(gz::sim::components::Name(name));
++        if (entity != gz::sim::kNullEntity && ecm_->Component<gz::sim::components::Actor>(entity) &&
++            std::find(actorsToDelete.begin(), actorsToDelete.end(), entity) == actorsToDelete.end())
++          actorsToDelete.push_back(entity);
++      }
++    }
++
+     // Clear pedestrians map first to prevent further access
+     pedestrians_.clear();
+     agentsInitialized_ = false;
+-    
+-    // Store deletion request for next PreUpdate cycle
+-    entities_to_delete_ = actorsToDelete;
+-    delete_requested_ = true;
+-    
++
++    if (ecm_)
++    {
++      // initial-arena-testing: remove the actors NOW instead of in the next PreUpdate. This callback only runs while
++      // PreUpdate/Configure spin rosnode_ on the simulation thread, so the ECM is ours to modify. Removal requests are
++      // applied at the end of the current iteration, i.e. before Arena (which gets our response only now) can have
++      // its re-spawn of the same actor names processed by UserCommands. With the old deferred removal, a fast
++      // re-spawn could be processed first and be rejected by Gazebo ("entity already exists").
++      for (const auto& entity : actorsToDelete)
++        ecm_->RequestRemoveEntity(entity);
++    }
++    else
++    {
++      // Store deletion request for next PreUpdate cycle
++      entities_to_delete_ = actorsToDelete;
++      delete_requested_ = true;
++    }
++
+     response->success = true;
+     response->deleted_count = static_cast<int32_t>(actorsToDelete.size());
+-    
++
+     RCLCPP_INFO(this->rosnode_->get_logger(), "Marked %zu actors for deletion", actorsToDelete.size());
+ }
+ 
+@@ -1589,6 +1620,7 @@ void HuNavSystemPluginIGN::updateGazeboPedestrians(gz::sim::EntityComponentManag
+  */
+ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::EntityComponentManager& _ecm)
+ {
++  ecm_ = &_ecm;  // initial-arena-testing: see deleteActorsCallback
+ 
+   // Handle deletion request
+   if (delete_requested_) {
+@@ -1620,10 +1652,12 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
  
    //GZ_PROFILE("HuNavSystemPluginIGN::PreUpdate");
  
@@ -32,7 +131,7 @@ index c05aa57..2e6e508 100644
  
    counter_++;
  
-@@ -1646,6 +1648,13 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
+@@ -1646,6 +1680,13 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
    std::chrono::duration<double> dtDuration = _info.simTime - lastUpdate_;
    double dt = dtDuration.count();
  

@@ -162,12 +162,8 @@ Speed is decided by Gazebo alone:
   Each needs its own `ROS_DOMAIN_ID` and `GZ_PARTITION`; not set up yet. One sim uses ~1 core for Gazebo plus ~2–3 for
   Nav2 and Arena, so 2 in parallel is realistic on 8 cores.
 
-### ⚠️ Known upstream bug: pedestrians don't survive an episode reset
-After the first episode ends, Arena fails to delete the old actors ("Delete actors service currently not available",
-present in every log). HuNav's plugin then loops forever trying to re-initialize them (`GET AGENTS CALLBACK` ~30×/s),
-and no pedestrian moves in episode 2+. The robot-only multi-episode loop works (see [08](08-ground-truth-localization.md)).
-**Until fixed: run one episode per launch** (a runner script that launches, waits for the first result, kills, repeats;
-~30 s of startup per episode).
+### ✅ Fixed (2026-10-11): pedestrians now survive an episode reset
+Before the fix, pedestrians vanished after the first episode (`human_states` empty, `GET AGENTS CALLBACK` loop). Cause: HuNav's plugin deleted the actors at each reset, but Arena still knew their names and only tried to *move* them instead of re-spawning them. Fixed in arena-rosnav and hunav_gz_plugin; verified over 5 consecutive episodes (20/20 pedestrians, at their start poses, walking). Full write-up: [13](13-pedestrian-reset-fix.md).
 
 ## 6. Validation results (2026-09-28)
 
