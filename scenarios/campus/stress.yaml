@@ -1,0 +1,47 @@
+# Scenario SPEC for scripts/generate_campus_scenario.py (guide: docs/14-campus-world.md).
+#
+# One entry per template under `templates:`. Every parameter is SAMPLED once per (template, seed):
+#   [lo, hi]            -> a float drawn uniformly            e.g. width: [2.0, 4.0]
+#   {int: [lo, hi]}     -> an integer                         e.g. n_oncoming: {int: [6, 14]}
+#   {choice: [a, b]}    -> one of the listed values           e.g. behavior: {choice: [1, 2]}
+#   {range: [lo, hi]}   -> kept as a range (the template draws per pedestrian), e.g. speed: {range: [0.9, 1.5]}
+#   a plain value       -> fixed
+# Generate:  uv run scripts/generate_campus_scenario.py scenarios/campus/stress.yaml --seeds 0 9
+
+name: stress
+seed: 0
+model: actor1                 # Gazebo actor for every pedestrian (only actor1 is verified working)
+
+defaults:                     # HuNav fields for every pedestrian (see scenarios/hallway_tame.yaml for the gotchas)
+  radius: 0.35
+  goal_radius: 0.6
+  cyclic_goals: true
+  behavior:
+    type: 1                   # REGULAR
+    social_force_factor: 5.0  # MUST be set: defaults to 0 = people walk through each other
+    obstacle_force_factor: 10.0
+
+templates:
+  corridor_counterflow:       # worked example
+    width: [2.0, 4.0]         # clear width of the narrowed section (m); the shell corridor is 5 m
+    n_oncoming: {int: [6, 14]}
+    n_with: {int: [0, 4]}
+    speed: {range: [0.9, 1.5]}
+
+  # --- TODO: fill these in as you write the templates (names must match TEMPLATES in the script)
+  # door_exit:
+  #   door_width: [0.9, 2.0]
+  #   n_exiting: {int: [8, 20]}
+  #   speed: {range: [0.8, 1.4]}
+  # blind_corner:
+  #   n: {int: [3, 8]}
+  #   speed: {range: [1.0, 2.0]}
+  # intersection:
+  #   n_east: {int: [4, 10]}
+  #   n_west: {int: [4, 10]}
+  #   speed: {range: [0.9, 1.5]}
+  #   group_frac: [0.0, 0.5]
+  # plaza_dense:
+  #   n: {int: [15, 40]}
+  #   speed: {range: [0.5, 1.3]}
+  #   frac_impassive: [0.0, 0.3]
