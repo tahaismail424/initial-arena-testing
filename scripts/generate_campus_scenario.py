@@ -237,8 +237,8 @@ def corridor_counterflow(campus, b, p):
     Robot: corridor_west (2, 2.5) -> corridor_east (26, 2.5), i.e. through the whole narrow section.
     Crowd: p["n_oncoming"] people who start on their westbound leg (coming at the robot) and p["n_with"] who start
     on their eastbound leg; everyone loops between a west turnaround (x 4.5..6) and an east one (x 22.5..24.5),
-    randomised per person so they don't pile up. If the corridor is >= 2.4 m wide, people keep right (westbound in
-    the north half, eastbound in the south half); narrower, everyone shares one lane and must squeeze past.
+    randomised per person so they don't pile up. People keep right: westbound in the north half, eastbound in the
+    south half (lanes >= 0.6 m apart, so oncoming people pass instead of meeting exactly head-on).
     Timing: initial positions are spread uniformly along the starting leg, so oncoming people meet the robot from
     the first seconds on, and with looping routes the corridor stays busy for the whole episode.
     """
@@ -254,13 +254,14 @@ def corridor_counterflow(campus, b, p):
     b.set_robot(campus.anchor("corridor_west"), campus.anchor("corridor_east"))
 
     lane_lo, lane_hi = mid - gap / 2 + 0.45, mid + gap / 2 - 0.45  # body radius 0.35 + 0.1 off the panels
-    two_lanes = gap >= 2.4
+    if lane_hi - mid < 0.3:
+        raise ValueError("corridor_counterflow: width < 1.5 m leaves no room for two lanes")
 
     def lanes():
-        if two_lanes:   # keep right: westbound (facing -x) walks the north half, eastbound the south half
-            return b.rng.uniform(mid + 0.15, lane_hi), b.rng.uniform(lane_lo, mid - 0.15)
-        y = b.rng.uniform(lane_lo, lane_hi) if lane_hi > lane_lo else mid
-        return y, y
+        # keep right: westbound (facing -x) walks the north half, eastbound the south half. Lanes >= 0.6 m apart
+        # also in the narrowest corridor: two people on the SAME line meet exactly head-on, the social force then
+        # has no sideways component and (goal force 20 >> social) they walk through each other.
+        return b.rng.uniform(mid + 0.3, lane_hi), b.rng.uniform(lane_lo, mid - 0.3)
 
     for cls, n, first_leg in (("oncoming", p["n_oncoming"], "west"), ("with_robot", p["n_with"], "east")):
         for _ in range(n):
@@ -276,54 +277,77 @@ def door_exit(campus, b, p):
     """Doorway against an exiting crowd: can the robot hold back while people come through a narrow door, then go?
 
     Geometry: the shell opening between the riser and the plaza (x 30..35 at y = 30) is closed down to a door of
-    width p["door_width"] (>= 1.2 m) centred at x = 32.5 + p["door_offset"], with one 1 m-deep panel block on each
-    side (y 29.5..30.5).
-    Robot: intersection (32.5, 20.5) -> plaza_center (34, 41), i.e. up the riser and through the door.
-    Crowd: p["n_exiting"] people with a home in the southern plaza. Their loop: home -> above the door -> door
-    centre -> below the door -> two points in the riser below the door (y 23.8..27, where the robot comes from)
-    -> back up through the door -> home. Every door passage has a waypoint on both sides AND in the door centre
-    (social forces only, no path planning); a door >= 2 m gets two keep-right lanes, a narrower one a single
-    file. p["n_waiting"] people stand beside the door in the plaza (clutter at the door).
-    Timing: with p["wave"] (standalone) everyone starts at home and walks out at once, so the exit wave fills the
-    door and the riser in front of the robot during its first ~10-40 s (DS-RNN arrives at the door after ~10 s,
-    DWB after ~40 s). Without it (gauntlet) people start at random points of their loops, so the door has two-way
-    traffic whenever the robot arrives.
+    width p["door_width"] centred at x = 32.5 + p["door_offset"], with one 1 m-deep panel block on each side
+    (y 29.5..30.5; clipped so each block is >= 0.5 m).
+    Robot: the riser at y = 24.5 (6 m below the door) -> plaza_center (34, 41), i.e. up and through the door.
+    Crowd, p["wave"] = true (standalone): p["n_exiting"] people start at homes spread over the southern plaza
+    (1.8-11 m from the door) and all head for the door at t = 0: down through the door (waypoints above, in, and
+    below the door, so nobody catches on the frame), down the riser past the robot, into the intersection, and
+    out along the crossing corridor to a destination 4-18 m east or west, where they stop (cyclic_goals false).
+    The exit wave fills the door for ~10-30 s: DS-RNN (1 m/s) meets it in the door, DWB (0.26 m/s, ~23 s to
+    the door) meets its tail plus everyone walking down the riser at it. Nobody walks back, because head-on
+    traffic in a single-file door makes HuNav people walk through each other (they cannot take turns).
+    Crowd, p["wave"] = false (gauntlet): everyone loops plaza home -> door -> riser below the door -> door ->
+    home, at random phases, so the door has two-way traffic whenever the robot arrives. This needs two lanes
+    (door_width >= 1.7 m: lanes w - 1.0 >= 0.7 m apart, out on the -x side, in on the +x side).
+    p["n_waiting"] people stand beside the door on the plaza side (clutter at the door).
     """
     rx0, ry0, rx1, ry1 = campus.zone("riser")
+    zx0, zy0, zx1, zy1 = campus.zone("crossing")
     dcx, dcy = campus.door["center"]
     shell = campus.door["shell_width"]
+    wave = p.get("wave", True)
     w = max(1.2, min(p["door_width"], shell - 1.0))
+    if not wave and w < 1.7:
+        raise ValueError("door_exit with wave: false (two-way traffic) needs door_width >= 1.7")
     cx = dcx + p.get("door_offset", 0.0)
     cx = min(max(cx, dcx - shell / 2 + 0.5 + w / 2), dcx + shell / 2 - 0.5 - w / 2)   # >= 0.5 m of block each side
     b.block_rect(dcx - shell / 2, dcy - 0.5, cx - w / 2, dcy + 0.5)
     b.block_rect(cx + w / 2, dcy - 0.5, dcx + shell / 2, dcy + 0.5)
 
-    b.set_robot(campus.anchor("intersection"), campus.anchor("plaza_center"))
+    b.set_robot((dcx, dcy - 5.5), campus.anchor("plaza_center"))
 
-    if w >= 2.0:     # two lanes: going out (facing -y) keep right = -x side, coming in on the +x side
-        x_out, x_in, jit = cx - (w / 2 - 0.5), cx + (w / 2 - 0.5), 0.04
-    else:
-        x_out = x_in = cx
-        jit = min(0.1, (w - 1.0) / 2)
     y_above, y_below = dcy + 1.4, dcy - 1.4
     px0, py0, px1, py1 = campus.zone("plaza")
+    off = w / 2 - 0.5 if w >= 1.7 else 0.0
+    x_out, x_in = cx - off, cx + off          # going out (facing -y) keep right = -x side
+    jit = 0.03 if w >= 1.7 else min(0.1, (w - 1.0) / 2)
+
+    def home():
+        for _ in range(500):
+            q = (b.rng.uniform(px0 + 2.0, px1 - 2.0), b.rng.uniform(py0 + 1.8, py0 + (11.0 if wave else 8.5)))
+            if b.is_clear(q, robot_sep=2.0):
+                return q
+        raise RuntimeError("no free home in the plaza")
+
+    dests = []                                 # wave: final standing spots in the crossing corridor, >= 1 m apart
+
+    def dest():
+        for _ in range(500):
+            side = b.rng.choice([-1, 1])
+            q = (dcx + side * b.rng.uniform(4.0, 18.0), b.rng.uniform(zy0 + 0.8, zy1 - 0.8))
+            if zx0 + 1.0 <= q[0] <= zx1 - 1.0 and all(math.dist(q, d) >= 1.0 for d in dests):
+                dests.append(q)
+                return q
+        raise RuntimeError("no free destination in the crossing corridor")
 
     def sink():
         return (b.rng.uniform(rx0 + 0.8, rx1 - 0.8), b.rng.uniform(ry1 - 6.2, ry1 - 3.0))
 
     for _ in range(p["n_exiting"]):
         speed = b.rng.uniform(*p["speed"])
-        for _ in range(200):          # a home in the southern plaza, clear of others / the robot's goal
-            home = (b.rng.uniform(px0 + 2.0, px1 - 2.0), b.rng.uniform(py0 + 1.8, py0 + 8.5))
-            if b.is_clear(home, robot_sep=2.0):
-                break
-        s1 = sink()
-        s2 = next(q for q in (sink() for _ in range(100)) if math.dist(q, s1) > 1.0)
+        h = home()
         xo = x_out + b.rng.uniform(-jit, jit)
-        xi = x_in + b.rng.uniform(-jit, jit)
-        route = [(xo, y_above), (xo, dcy), (xo, y_below), s1, s2, (xi, y_below), (xi, dcy), (xi, y_above), home]
-        phase = (len(route) - 1, 0.0) if p.get("wave", True) else None   # wave: start at home, heading out
-        b.add_on_loop("exiting", route, speed, phase=phase)
+        out_leg = [(xo, y_above), (xo, dcy), (xo, y_below)]
+        if wave:
+            mid = (b.rng.uniform(rx0 + 1.0, rx1 - 1.0), b.rng.uniform(zy0 + 1.5, zy1 - 1.5))   # in the intersection
+            b.add_pedestrian("exiting", h, out_leg + [mid, dest()], speed, hunav={"cyclic_goals": False})
+        else:
+            s1 = sink()
+            s2 = next(q for q in (sink() for _ in range(100)) if math.dist(q, s1) > 1.0)
+            xi = x_in + b.rng.uniform(-jit, jit)
+            route = out_leg + [s1, s2, (xi, y_below), (xi, dcy), (xi, y_above), h]
+            b.add_on_loop("exiting", route, speed)
 
     for _ in range(p.get("n_waiting", 0)):
         for _ in range(200):
@@ -563,7 +587,9 @@ def check_scenario(scenario, campus):
         for q in pts:
             if not pt_ok.contains(Point(q)):
                 problems.append(f"{a['name']}: point {q} inside/too close to a wall or panel")
-        legs = list(zip(pts, pts[1:])) + [(pts[-1], pts[1])]           # start -> wp0 -> ... -> wp_last -> wp0
+        legs = list(zip(pts, pts[1:]))                                 # start -> wp0 -> ... -> wp_last
+        if a.get("cyclic_goals", True):
+            legs.append((pts[-1], pts[1]))                             # ... -> wp0 again
         for q0, q1 in legs:
             if q0 != q1 and not leg_ok.contains(LineString([q0, q1])):
                 problems.append(f"{a['name']}: no line of sight {q0} -> {q1}")
@@ -596,7 +622,7 @@ def save_preview(scenario, world_dir, out_png, title):
     classes = sorted({a["class"] for a in scenario["obstacles"]["dynamic"]})
     colors = dict(zip(classes, plt.cm.tab10.colors))
     for a in scenario["obstacles"]["dynamic"]:
-        pts = [a["pos"]] + a["waypoints"] + [a["waypoints"][0]]
+        pts = [a["pos"]] + a["waypoints"] + ([a["waypoints"][0]] if a.get("cyclic_goals", True) else [])
         ax.plot([q[0] for q in pts], [q[1] for q in pts], color=colors[a["class"]], alpha=0.35, lw=1)
         ax.plot(*a["pos"][:2], "o", color=colors[a["class"]], ms=5)
     for c in classes:

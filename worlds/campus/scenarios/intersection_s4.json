@@ -55,8 +55,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -98,8 +98,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -141,8 +141,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -184,8 +184,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -227,8 +227,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -270,8 +270,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -313,8 +313,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -356,8 +356,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -399,8 +399,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -442,8 +442,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -485,8 +485,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -528,8 +528,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -571,8 +571,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -614,8 +614,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -657,8 +657,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -700,8 +700,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -743,8 +743,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       },
       {
@@ -786,8 +786,8 @@
         "cyclic_goals": true,
         "behavior": {
           "type": 1,
-          "social_force_factor": 5.0,
-          "obstacle_force_factor": 10.0
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
         }
       }
     ],

@@ -18,8 +18,12 @@ defaults:                     # HuNav fields for every pedestrian (see scenarios
   cyclic_goals: true
   behavior:
     type: 1                   # REGULAR
-    social_force_factor: 5.0  # MUST be set: defaults to 0 = people walk through each other
-    obstacle_force_factor: 10.0
+    # MUST be set (default 0 = people walk through each other) and must be FLOATS (Arena drops int fields).
+    # Arena hard-codes the goal force to 20 (lightsfm default 2), so these are ~10x lightsfm's defaults (2.1, 10)
+    # to keep the same balance. Tested (docs/14 §8): 5/10 -> people overlapped (< 0.4 m) 23% of the time in the
+    # door and corridor flows, 20/30 -> 9% corridor, 1% intersection, 4% plaza.
+    social_force_factor: 20.0
+    obstacle_force_factor: 30.0
 
 templates:
   corridor_counterflow:       # two-way traffic in a corridor narrowed by panels (x 6..22)
@@ -31,10 +35,10 @@ templates:
   door_exit:                  # door between riser and plaza against an exiting crowd
     door_width: [1.2, 2.2]    # m; >= 1.2 (Jackal ~0.5 m wide incl. wheels; people 0.7 m)
     door_offset: [-1.0, 1.0]  # door centre relative to the shell opening's centre (clipped: >= 0.5 m block each side)
-    n_exiting: {int: [8, 16]}
+    n_exiting: {int: [10, 20]}
     n_waiting: {int: [0, 3]}  # people standing beside the door (plaza side)
     speed: {range: [0.8, 1.4]}
-    wave: true                # everyone starts at home in the plaza and walks out at t = 0
+    wave: true                # everyone walks out at t = 0 and leaves along the crossing corridor (one-way)
 
   blind_corner:               # people come round the corridor -> riser corner
     n: {int: [3, 8]}
@@ -70,7 +74,7 @@ templates:
       speed: {range: [0.9, 1.5]}
       group_frac: [0.0, 0.4]
     door_exit:
-      door_width: [1.2, 2.2]
+      door_width: [1.7, 2.4]  # two-way traffic needs two lanes (>= 1.7 m)
       door_offset: [-1.0, 1.0]
       n_exiting: {int: [6, 10]}
       n_waiting: {int: [0, 2]}
