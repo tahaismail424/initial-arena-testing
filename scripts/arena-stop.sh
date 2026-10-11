@@ -18,6 +18,13 @@ if pgrep -f "[r]os2 launch arena_bringup" >/dev/null; then
   done
 fi
 
+# The episode recorder (arena-launch.sh --record) exits by itself when ros2 launch is gone; this is a backstop
+# that still lets it close the running episode cleanly (SIGINT, not -9).
+if pgrep -f "[a]rena_recorder.py" >/dev/null; then
+  pkill -INT -f "[a]rena_recorder.py"
+  sleep 2
+fi
+
 LEFTOVERS='[g]z sim|[t]ask_generator_node|[h]unav_agent_manager|[c]ontroller_server|[p]lanner_server|[b]t_navigator|[p]arameter_bridge|[r]viz2|[s]tatic_transform_publisher|[n]av2py_run|[v]env/bin/python -m nav2py_'
 if pgrep -f "$LEFTOVERS" >/dev/null; then
   echo "force-killing leftovers:"

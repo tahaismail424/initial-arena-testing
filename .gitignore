@@ -8,3 +8,9 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# recorded runs and rendered media stay out of the repo (runs live in ~/arena_runs)
+arena_runs/
+*.mp4
+*.gif
+.ipynb_checkpoints/

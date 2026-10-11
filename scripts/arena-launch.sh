@@ -2,11 +2,14 @@
 # Launch Arena (Gazebo + HuNav + Jackal + Nav2) on a Lyu Lab VM.
 # Run from a terminal in the VM's graphical desktop (or with DISPLAY=:1). Ctrl+C stops everything.
 #
-# Usage: arena-launch.sh [--headless] [world] [task_mode] [extra ros2 launch args...]
-#   --headless   no windows at all (same as headless:=2). Saves ~1 core of Gazebo GUI rendering; see docs/09 §5.
+# Usage: arena-launch.sh [--headless] [--record[=DIR]] [world] [task_mode] [extra ros2 launch args...]
+#   --headless     no windows at all (same as headless:=2). Saves ~1 core of Gazebo GUI rendering; see docs/09 §5.
+#   --record[=DIR] also run scripts/arena_recorder.py: one CSV/JSON record per episode under DIR
+#                  (default $ARENA_RUNS or ~/arena_runs). Load with arena_analysis; see docs/12.
 #
 # Examples:
 #   arena-launch.sh --headless school_hallway scenario scenario:=hallway_tame.json   # crowd, no windows (benchmarks)
+#   arena-launch.sh --headless --record school_hallway scenario scenario:=hallway_tame.json local_planner:=dsrnn
 #   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json rviz:=false   # crowd, Gazebo window only
 #   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json              # Gazebo + RViz (heaviest)
 #   arena-launch.sh school_hallway scenario scenario:=hallway_tame.json local_planner:=crowdnav
@@ -22,11 +25,16 @@
 #   * no GPU              -> Mesa software rendering (llvmpipe) on the CPU            [arena-dev-cpu]
 #   Force one with ARENA_RENDER=gpu or ARENA_RENDER=cpu.
 
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"   # this repo's scripts/ (resolved before we cd away)
+
 # Options (must come before the positional args).
 EXTRA=()
+RECORD_DIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --headless) EXTRA+=(headless:=2); shift ;;
+    --record)   RECORD_DIR="${ARENA_RUNS:-$HOME/arena_runs}"; shift ;;
+    --record=*) RECORD_DIR="${1#--record=}"; shift ;;
     -h|--help)  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) break ;;
   esac
@@ -60,6 +68,14 @@ unset FASTRTPS_DEFAULT_PROFILES_FILE
 
 ARGS=(sim:=gazebo human:=hunav world:="$WORLD" robot:=jackal
       "${TM[@]}" local_planner:=dwb global_planner:=navfn localization:=ground_truth "${EXTRA[@]}" "$@")
+
+if [ -n "$RECORD_DIR" ]; then
+  # Started before `exec`, so after the exec its parent is `ros2 launch` itself: --exit-with-parent makes the
+  # recorder close the last episode and exit as soon as the launch ends (Ctrl+C or arena-stop.sh).
+  echo "[arena-launch] recording episodes under $RECORD_DIR"
+  python3 "$SCRIPT_DIR/arena_recorder.py" --exit-with-parent --out "$RECORD_DIR" \
+    --launch-args "${ARGS[@]}" &
+fi
 
 if [ "$RENDER" = gpu ]; then
   echo "[arena-launch] rendering on the NVIDIA GPU (VirtualGL)"
