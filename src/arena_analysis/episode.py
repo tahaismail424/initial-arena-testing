@@ -45,7 +45,8 @@ class Episode:
 
     Attributes:
         path   episode directory (…/episode_000)
-        meta   dict from meta.json (planner, scenario, start, goal, t_start, t_end, outcome, …)
+        meta   dict from meta.json (planner, scenario, map, start, goal, t_start, t_end, outcome, …)
+        scenario, scenario_spec   the scenario file actually used and its JSON (from the run's copy)
         robot  DataFrame, one row per sample: t, x, y, yaw, odom/cmd velocities + derived columns
         humans DataFrame, one row per (sample, pedestrian): t, id, name, x, y, vx, vy, radius, …
         plan   DataFrame of global plans: t, plan_idx, i, x, y (one plan_idx per stored plan)
@@ -130,7 +131,33 @@ class Episode:
         if self.run is not None:
             search.append(self.run.path / "world")
         search.append(self.path.parent / "world")
-        return World.load(self.meta.get("world", ""), *search)
+        # meta["map"]: the per-scenario map this episode's scenario used (panels drawn into it), if any
+        return World.load(self.meta.get("world", ""), *search, map_file=self.meta.get("map"))
+
+    @property
+    def scenario(self) -> str | None:
+        """The scenario file the task generator actually applied for this episode (meta["scenario"]).
+        With hot-switching (several scenarios in one launch) episodes of one run differ; see meta["scenario_source"]."""
+        return self.meta.get("scenario")
+
+    @property
+    def scenario_file(self) -> Path | None:
+        """The run's copy of this episode's scenario JSON (<run>/scenarios/<file>, or the older <run>/scenario.json
+        when it is the launch scenario), or None."""
+        run_dir = self.run.path if self.run is not None else self.path.parent
+        name = self.scenario
+        if name and (run_dir / "scenarios" / name).is_file():
+            return run_dir / "scenarios" / name
+        launch = (self.run.meta if self.run is not None else {}).get("scenario")
+        if (run_dir / "scenario.json").is_file() and (name is None or name == launch):
+            return run_dir / "scenario.json"
+        return None
+
+    @cached_property
+    def scenario_spec(self) -> dict | None:
+        """This episode's scenario JSON as a dict (robots, obstacles, map), or None if the run has no copy."""
+        f = self.scenario_file
+        return json.loads(f.read_text()) if f is not None else None
 
     # ------------------------------------------------------------------ analysis
     def distances(self, human_radius: float | None = None) -> pd.DataFrame:
@@ -198,8 +225,17 @@ class Run:
         return self.episodes[i]
 
     def summary(self, human_radius: float | None = None) -> pd.DataFrame:
-        """One row per episode with the keys of Episode.summary()."""
+        """One row per episode with the keys of Episode.summary() (incl. `scenario` and `map` per episode)."""
         return pd.DataFrame([ep.summary(human_radius=human_radius) for ep in self.episodes])
+
+    @property
+    def scenarios(self) -> list[str]:
+        """Scenario files used by this run's episodes, in order of first use (several when hot-switching)."""
+        out = []
+        for ep in self.episodes:
+            if ep.scenario and ep.scenario not in out:
+                out.append(ep.scenario)
+        return out
 
 
 def load_run(path) -> Run:

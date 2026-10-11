@@ -130,7 +130,7 @@ index 1a85f736..6591674e 100644
      )
  
 diff --git a/task_generator/task_generator/manager/robot_manager/robot_manager.py b/task_generator/task_generator/manager/robot_manager/robot_manager.py
-index 9f493815..4704a099 100644
+index 9f493815..6813e4c2 100644
 --- a/task_generator/task_generator/manager/robot_manager/robot_manager.py
 +++ b/task_generator/task_generator/manager/robot_manager/robot_manager.py
 @@ -1,3 +1,4 @@
@@ -138,6 +138,15 @@ index 9f493815..4704a099 100644
  import os
  import typing
  
+@@ -14,7 +15,7 @@ import rclpy.client
+ import rclpy.publisher
+ import rclpy.timer
+ from arena_rclpy_mixins.shared import Namespace
+-from nav2_msgs.srv import ClearCostmapAroundRobot
++from nav2_msgs.srv import ClearCostmapAroundRobot, ClearEntireCostmap
+ 
+ import arena_bringup.extensions.NodeLogLevelExtension as NodeLogLevelExtension
+ import task_generator.utils.arena as Utils
 @@ -81,6 +82,9 @@ class RobotManager(NodeInterface):
          self._start_pos = Pose()
          self._goal_pos = Pose()
@@ -170,7 +179,7 @@ index 9f493815..4704a099 100644
  
          self._robot_radius = self.node.rosparam[float].get(
              'robot_radius',
-@@ -190,6 +200,9 @@ class RobotManager(NodeInterface):
+@@ -190,9 +200,35 @@ class RobotManager(NodeInterface):
          return self._is_goal_reached
  
      def move_robot_to_pos(self, pose: Pose):
@@ -180,7 +189,33 @@ index 9f493815..4704a099 100644
          pose.position.z += self._config.model_params.z_offset
          self._entity_manager.move_robot(name=self.name, pose=pose)
          self.clearCostmapAroundRobot(5.0)
-@@ -230,6 +243,11 @@ class RobotManager(NodeInterface):
++        # initial-arena-testing: also wipe the GLOBAL costmap. Upstream only cleared the local one (5 m around
++        # the robot), so lidar marks from earlier episodes / scenarios (e.g. wall panels of a scenario that is no
++        # longer loaded) stayed in the global costmap forever and every episode's planning depended on history.
++        # A full clear re-applies the static layer (the current map, see TM_Scenario's per-scenario maps) and
++        # empties the obstacle layer.
++        self.clearGlobalCostmap()
++
++    _clear_global_costmap_srv: rclpy.client.Client | None = None
++
++    def clearGlobalCostmap(self, timeout: float = 10.0) -> bool:
++        """initial-arena-testing: clear the whole global costmap (nav2 ClearEntireCostmap)."""
++        service_name = self.node.service_namespace(self.name, 'global_costmap', 'clear_entirely_global_costmap')
++        if self._clear_global_costmap_srv is None:
++            self._clear_global_costmap_srv = self.node.create_client(ClearEntireCostmap, str(service_name))
++        if not self._clear_global_costmap_srv.wait_for_service(timeout_sec=timeout):
++            self._logger.warn(f'{service_name} not available after {timeout} s; global costmap NOT cleared')
++            return False
++        result = self._clear_global_costmap_srv.call(ClearEntireCostmap.Request())
++        if result is None:
++            self._logger.error(f'service call failed for {service_name}')
++            return False
++        self._logger.info(f'cleared the global costmap ({service_name})')
++        return True
+ 
+     def clearCostmapAroundRobot(self, reset_distance: float) -> bool:
+         """Clear the costmap around the robot."""
+@@ -230,6 +266,11 @@ class RobotManager(NodeInterface):
          start_pos: typing.Optional[Pose],
          goal_pos: typing.Optional[Pose],
      ):
@@ -192,7 +227,7 @@ index 9f493815..4704a099 100644
          if start_pos is not None:
              self._start_pos = self._environment_manager.realize(start_pos)
              self.move_robot_to_pos(start_pos)
-@@ -324,7 +342,11 @@ class RobotManager(NodeInterface):
+@@ -324,7 +365,11 @@ class RobotManager(NodeInterface):
                  # 'train_mode': self.node.declare_parameter('train_mode', False).value,
                  'agent_name': self._robot.agent,
                  'use_sim_time': 'True',
@@ -205,7 +240,7 @@ index 9f493815..4704a099 100644
              }
  
              if self._robot.record_data_dir:
-@@ -363,8 +385,15 @@ class RobotManager(NodeInterface):
+@@ -363,8 +408,15 @@ class RobotManager(NodeInterface):
          )
  
      def _goal_status_callback(self, data: action_msgs.msg.GoalStatusArray):
@@ -224,10 +259,110 @@ index 9f493815..4704a099 100644
      def update(self):
          """
 diff --git a/task_generator/task_generator/manager/world_manager/world_manager_ros.py b/task_generator/task_generator/manager/world_manager/world_manager_ros.py
-index cba43cd7..c724ed9d 100644
+index cba43cd7..2e1acfca 100644
 --- a/task_generator/task_generator/manager/world_manager/world_manager_ros.py
 +++ b/task_generator/task_generator/manager/world_manager/world_manager_ros.py
-@@ -254,6 +254,7 @@ class WorldManagerROS(MapServerHandler, WorldManager):
+@@ -1,6 +1,7 @@
+ 
+ import os
+ import tempfile
++import threading
+ import time
+ import typing
+ 
+@@ -221,10 +222,81 @@ class WorldManagerROS(MapServerHandler, WorldManager):
+             raise RuntimeError(
+                 f'failed to load map for world {world_name}: status code {response.result}')
+ 
++        # initial-arena-testing: the world's own map is what map_server serves now (see load_map_yaml)
++        self._loaded_map_yaml = os.path.realpath(arena_simulation_setup.world.World(world_name).map.map_yaml)
++
++        return True
++
++    # initial-arena-testing: per-scenario maps. A scenario JSON may name its own map (top-level "map", relative to
++    # the world's map/ dir, written by initial-arena-testing/scripts/scenario_maps.py: the world map + the
++    # scenario's wall panels). TM_Scenario calls this at every reset BEFORE the robot is placed and the goal is
++    # sent; map_yaml=None restores the world's own map.yaml. Only map_server's map changes (the global costmap's
++    # static layer follows it); the world's Gazebo walls / obstacles are NOT respawned (see _map_callback).
++    def load_map_yaml(self, map_yaml: str | None, timeout: float = 10.0) -> bool:
++        base = arena_simulation_setup.world.World(self.world_name).map.map_yaml
++        target = os.path.realpath(map_yaml or base)
++        if target == getattr(self, '_loaded_map_yaml', None):
++            return True
++        if not os.path.isfile(target):
++            self._logger.error(f'scenario map {target} does not exist; keeping {self._loaded_map_yaml}')
++            return False
++
++        with open(target) as f:
++            map_yaml_dict = dict(yaml.safe_load(f))
++        image = map_yaml_dict['image']
++        if not os.path.isabs(image):
++            map_yaml_dict['image'] = os.path.join(os.path.dirname(target), image)
++        origin = list(map_yaml_dict.get('origin', [0, 0, 0]))
++        shifted_origin = self._environment_manager.realize(Position(x=origin[0], y=origin[1]))
++        origin[0], origin[1] = shifted_origin.x, shifted_origin.y
++        map_yaml_dict['origin'] = origin
++
++        self._map_received.clear()
++        with tempfile.TemporaryDirectory() as tmpdir:
++            tmp_yaml = os.path.join(tmpdir, 'map.yaml')
++            with open(tmp_yaml, 'w') as f:
++                yaml.safe_dump(map_yaml_dict, f)
++            response = self._cli.call(nav2_msgs.srv.LoadMap.Request(map_url=tmp_yaml))
++        if response is None or response.result > 0:
++            self._logger.error(f'failed to load map {target}: '
++                               f'{"service timed out" if response is None else f"status code {response.result}"}')
++            return False
++        self._loaded_map_yaml = target
++
++        # wait until the new map has been published (the global costmap's static layer subscribes to the same
++        # latched topic), so the first plan of the episode is made on it
++        load_time = response.map.info.map_load_time
++        deadline = time.monotonic() + timeout
++        while time.monotonic() < deadline:
++            last = self._last_map_load_time
++            if last is not None and (last.sec, last.nanosec) >= (load_time.sec, load_time.nanosec):
++                break
++            self._map_received.wait(0.1)
++            self._map_received.clear()
++        else:
++            self._logger.warn(f'loaded map {target}, but it was not published within {timeout} s')
++        self._logger.info(f'map_server now serves {target}')
+         return True
+ 
++    @property
++    def loaded_map_yaml(self) -> str | None:
++        """initial-arena-testing: realpath of the map.yaml map_server was last told to load."""
++        return getattr(self, '_loaded_map_yaml', None)
++
+     def _map_callback(self, costmap: nav_msgs.msg.OccupancyGrid):
++        # initial-arena-testing: tell load_map_yaml() (waiting in a reset) when this map is fully processed
++        try:
++            self._map_callback_impl(costmap)
++        finally:
++            self._last_map_load_time = costmap.info.map_load_time
++            self._map_received.set()
++
++    def _map_callback_impl(self, costmap: nav_msgs.msg.OccupancyGrid):
+         if self._world.map.time <= costmap.info.map_load_time:
++            # initial-arena-testing: a per-scenario map of the SAME world only updates the occupancy data; the
++            # world-change callbacks (which delete and respawn the world's walls/obstacles in Gazebo) run only
++            # for the first map of a world.
++            world_changed = self._map_name != self.world_name
+ 
+             world_config = arena_simulation_setup.world.World(self.world_name)
+ 
+@@ -240,6 +312,9 @@ class WorldManagerROS(MapServerHandler, WorldManager):
+ 
+             self._map_name = self.world_name
+ 
++            if not world_changed:   # initial-arena-testing
++                return
++
+             for callback in self._callbacks:
+                 try:
+                     callback()
+@@ -254,6 +329,7 @@ class WorldManagerROS(MapServerHandler, WorldManager):
              self.node.service_namespace('map'),
              self._map_callback,
              1,
@@ -235,6 +370,17 @@ index cba43cd7..c724ed9d 100644
          )
  
          while not self.check_map_server():
+@@ -283,6 +359,10 @@ class WorldManagerROS(MapServerHandler, WorldManager):
+         self.update_world(world_map=WorldMap.from_costmap(_DUMMY_MAP), obstacles=None, walls=[])
+         self._world_name = ''
+         self._map_name = None
++        # initial-arena-testing: per-scenario maps (load_map_yaml)
++        self._loaded_map_yaml = None
++        self._last_map_load_time = None
++        self._map_received = threading.Event()
+ 
+     def start(self):
+         self._setup_world_callbacks()
 diff --git a/task_generator/task_generator/simulators/human/hunav/hunav.py b/task_generator/task_generator/simulators/human/hunav/hunav.py
 index 92e51878..fc71c68b 100644
 --- a/task_generator/task_generator/simulators/human/hunav/hunav.py
@@ -357,3 +503,135 @@ index 56890073..7f665c2e 100644
          })
  
          bridge_arguments = mappings.as_args()
+diff --git a/task_generator/task_generator/tasks/obstacles/scenario.py b/task_generator/task_generator/tasks/obstacles/scenario.py
+index 9749e1e9..069a8517 100644
+--- a/task_generator/task_generator/tasks/obstacles/scenario.py
++++ b/task_generator/task_generator/tasks/obstacles/scenario.py
+@@ -11,7 +11,11 @@ class TM_Scenario(TM_Obstacles):
+         return World(self.node._world_manager.world_name).scenario(scenario).load()
+ 
+     def reset(self, **kwargs) -> Obstacles:
+-        return self._config.value.static, self._config.value.dynamic
++        # initial-arena-testing: use the scenario the robots' TM_Scenario applied in this same reset (if any), so
++        # obstacles can't come from a different file when task.scenario.file changes mid-reset.
++        snapshot = self.node.__dict__.pop('_ilt_scenario_snapshot', None)
++        scenario = snapshot.scenario if snapshot is not None else self._config.value
++        return scenario.static, scenario.dynamic
+ 
+     def __init__(self, **kwargs):
+         TM_Obstacles.__init__(self, **kwargs)
+diff --git a/task_generator/task_generator/tasks/robots/scenario.py b/task_generator/task_generator/tasks/robots/scenario.py
+index b461c8f1..4c0e0d67 100644
+--- a/task_generator/task_generator/tasks/robots/scenario.py
++++ b/task_generator/task_generator/tasks/robots/scenario.py
+@@ -1,9 +1,32 @@
++import json
++import os
++
++import attrs
++import rclpy.qos
++import std_msgs.msg
++import yaml
+ from arena_rclpy_mixins.ROSParamServer import ROSParamT
+-from arena_simulation_setup.world import World, RobotGoal
++from arena_simulation_setup.world import World, RobotGoal, Scenario
+ from task_generator.shared import PositionRadius
+ from task_generator.tasks.robots import TM_Robots
+ 
+ 
++# initial-arena-testing: everything a reset needs from ONE read of the scenario file. TM_Scenario (robots) applies
++# it, and hands the same snapshot to the obstacles' TM_Scenario of the same reset (node._ilt_scenario_snapshot),
++# so robots, obstacles, map and the published scenario_info always come from the same file even if
++# task.scenario.file changes in the middle of a reset (hot-switching, docs/14 §9 of initial-arena-testing).
++@attrs.define
++class ScenarioSnapshot:
++    file: str
++    scenario: Scenario
++    map: str | None            # the JSON's top-level "map" (relative to the world's map/ dir), or None
++    map_yaml: str | None       # resolved absolute path of that map.yaml, or None (= the world's own map)
++
++    @property
++    def robots(self) -> list[RobotGoal]:
++        return self.scenario.robots
++
++
+ class TM_Scenario(TM_Robots):
+     """
+     This class represents a scenario for robots in the task generator.
+@@ -13,10 +36,40 @@ class TM_Scenario(TM_Robots):
+         _config (Config): The configuration object for the scenario.
+     """
+ 
+-    _config: ROSParamT[list[RobotGoal]]
+-
+-    def _parse_scenario(self, scenario: str) -> list[RobotGoal]:
+-        return World(self.node._world_manager.world_name).scenario(scenario).load().robots
++    _config: ROSParamT[ScenarioSnapshot]
++
++    def _parse_scenario(self, scenario: str) -> ScenarioSnapshot:
++        # initial-arena-testing: keep the file name and the optional top-level "map" field as well
++        world = World(self.node._world_manager.world_name)
++        handle = world.scenario(scenario)
++        with open(handle.path) as f:
++            raw = yaml.safe_load(f) or {}
++        rel_map = raw.get('map') or None
++        map_yaml = os.path.join(world.map.path, rel_map) if rel_map else None
++        return ScenarioSnapshot(file=str(scenario), scenario=handle.load(), map=rel_map, map_yaml=map_yaml)
++
++    def _apply_scenario_map(self, snapshot: ScenarioSnapshot):
++        """initial-arena-testing: make map_server serve this scenario's map (or the world's map.yaml if it has
++        none) and publish which scenario/map this reset applies. Runs before any robot is moved or given a goal;
++        the global costmap is cleared right after, when the robot is placed (RobotManager.move_robot_to_pos)."""
++        world_manager = self.node._world_manager
++        if snapshot.map_yaml is not None and not os.path.isfile(snapshot.map_yaml):
++            self._logger.error(f'scenario {snapshot.file}: map {snapshot.map_yaml} not found (new files need '
++                               '`colcon build --symlink-install --packages-select arena_simulation_setup`); '
++                               'using the world map')
++            ok = world_manager.load_map_yaml(None)
++        else:
++            ok = world_manager.load_map_yaml(snapshot.map_yaml)
++        info = {
++            'episode': getattr(self.node, '_number_of_resets', None),   # = the Int16 task_reset that follows
++            'file': snapshot.file,
++            'map': snapshot.map,
++            'map_loaded': world_manager.loaded_map_yaml,
++            'map_ok': bool(ok),
++            'world': world_manager.world_name,
++        }
++        self._pub_scenario_info.publish(std_msgs.msg.String(data=json.dumps(info)))
++        self._logger.info(f'applying scenario {snapshot.file} (map: {snapshot.map or "world map"})')
+ 
+     def reset(self, **kwargs):
+         """
+@@ -31,7 +84,12 @@ class TM_Scenario(TM_Robots):
+ 
+         super().reset(**kwargs)
+ 
+-        SCENARIO_ROBOTS = self._config.value
++        # initial-arena-testing: one snapshot per reset (robots, obstacles, map), map loaded before the robot moves
++        snapshot = self._config.value
++        self.node._ilt_scenario_snapshot = snapshot
++        self._apply_scenario_map(snapshot)
++
++        SCENARIO_ROBOTS = snapshot.robots
+ 
+         # check robot manager length
+         managed_robots = list(self._PROPS.robot_managers.values())
+@@ -65,7 +123,16 @@ class TM_Scenario(TM_Robots):
+     def __init__(self, **kwargs):
+         TM_Robots.__init__(self, **kwargs)
+ 
+-        self._config = self.node.ROSParam[list[RobotGoal]](
++        # initial-arena-testing: latched JSON {"episode", "file", "map", "map_loaded", "map_ok", "world"} per
++        # reset, published before task_reset; the episode recorder labels episodes with it.
++        self._pub_scenario_info = self.node.create_publisher(
++            std_msgs.msg.String,
++            self.node.service_namespace('scenario_info'),
++            rclpy.qos.QoSProfile(depth=1, durability=rclpy.qos.DurabilityPolicy.TRANSIENT_LOCAL,
++                                 reliability=rclpy.qos.ReliabilityPolicy.RELIABLE),
++        )
++
++        self._config = self.node.ROSParam[ScenarioSnapshot](
+             self.namespace('file'),
+             'default.json',
+             parse=self._parse_scenario,

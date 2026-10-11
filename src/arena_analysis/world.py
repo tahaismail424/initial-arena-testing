@@ -17,13 +17,20 @@ class World:
     map_extent: tuple | None = None             # (xmin, xmax, ymin, ymax) of the image in metres
 
     @classmethod
-    def load(cls, name: str, *search_dirs: Path) -> "World":
+    def load(cls, name: str, *search_dirs: Path, map_file: str | None = None) -> "World":
         """Find `<dir>/walls.yaml`, `<dir>/map.yaml` in the given dirs, then in this repo's worlds/<name>/map/.
 
         The recorder copies the world's map/ folder into each run (`<run>/world/`), so a run stays plottable even
-        if the world is regenerated later. Missing files are fine: you just get fewer layers in the plot."""
+        if the world is regenerated later. Missing files are fine: you just get fewer layers in the plot.
+        map_file: a per-scenario map (meta["map"], e.g. "scenario_maps/door_exit_s3.yaml", relative to the map/
+        dirs) to use instead of map.yaml when it is found: it shows the scenario's wall panels."""
         candidates = [Path(d) for d in search_dirs] + [REPO / "worlds" / name / "map"]
         world = cls(name=name)
+        if map_file:
+            for d in candidates:
+                if (d / map_file).is_file():
+                    world._load_map(d / map_file)
+                    break
         for d in candidates:
             if (d / "walls.yaml").is_file() and not world.walls:
                 with open(d / "walls.yaml") as f:

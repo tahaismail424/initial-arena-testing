@@ -61,6 +61,8 @@ def summarize(ep, human_radius: float | None = None) -> dict:
     """The numbers we compare planners on. Keys:
 
     episode, planner, scenario, outcome   from the metadata (outcome: success / timeout / aborted / reset / incomplete)
+                     scenario = the file the task generator actually applied (differs per episode when hot-switching)
+    map              the scenario's own map (meta["map"], e.g. scenario_maps/x.yaml) or None = the world's map
     success          outcome == "success" (Nav2 reported the goal reached)
     reached_goal     final robot position within goal_tolerance of the goal (independent of Nav2)
     duration         sim seconds from episode start to end
@@ -85,6 +87,7 @@ def summarize(ep, human_radius: float | None = None) -> dict:
         "episode": m.get("episode"),
         "planner": m.get("local_planner"),
         "scenario": m.get("scenario"),
+        "map": m.get("map"),
         "outcome": m.get("outcome"),
         "success": m.get("outcome") == "success",
     }

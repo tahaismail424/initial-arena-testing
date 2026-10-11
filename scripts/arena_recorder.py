@@ -13,7 +13,9 @@ One directory per episode:
 
   ~/arena_runs/<YYYYmmdd-HHMMSS>_<local_planner>_<scenario>/
       run.json                  launch arguments, recorder settings, git commit of this repo
-      scenario.json, world/     copies of the scenario and the world's map files (runs are self-contained)
+      scenario.json, world/     copies of the launch scenario and the world's map files (runs are self-contained)
+      scenarios/<file>.json     copy of every scenario file an episode used (several when hot-switching)
+      world/scenario_maps/      the per-scenario maps those episodes used
       episode_000/  robot.csv humans.csv plan.csv events.csv meta.json
       episode_001/  ...
 
@@ -23,6 +25,9 @@ How episodes are detected (read from task_generator/node.py and tasks/task_facto
   /reset_start                    (Empty)  the task generator starts a reset -> close the running episode
   /task_generator_node/task_reset (Int16)  reset finished, robot teleported, goal sent -> new episode
                                            (data = episode index, 0 for the first one)
+  /task_generator_node/scenario_info (String, latched; our arena-rosnav patch) JSON {"episode", "file", "map", ...}
+                                           published by each reset BEFORE task_reset: the scenario (and map) that
+                                           reset actually applied -> meta.json "scenario" / "map" (hot-switching)
   .../navigate_to_pose/_action/status      Nav2 goal status; SUCCEEDED in this episode = success
 An episode ends with a reset when the goal is reached or after `timeout` sim seconds (task_generator.yaml).
 
@@ -56,7 +61,8 @@ from geometry_msgs.msg import PoseStamped, Twist
 from hunav_msgs.msg import Agent, Agents
 from nav_msgs.msg import Odometry, Path as PathMsg
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
-from std_msgs.msg import Empty, Int16
+from std_msgs.msg import Empty, Int16, String
+from rcl_interfaces.srv import GetParameters
 
 REPO = Path(__file__).resolve().parent.parent
 ARENA_WORLDS = Path.home() / "arena_ws/src/arena/simulation-setup/worlds"
@@ -181,6 +187,9 @@ class Recorder:
 
         self.episode: Episode | None = None
         self.n_episodes = 0
+        # scenario actually applied per Arena episode index, from /task_generator_node/scenario_info
+        self.scenario_infos: dict[int, dict] = {}
+        self.scenarios_copied: set[str] = set()
         self.run_dir = self._make_run_dir()
 
         # --- subscriptions ---
@@ -196,6 +205,12 @@ class Recorder:
                        durability=QoSDurabilityPolicy.TRANSIENT_LOCAL))  # action status is latched
         sub(Empty, "/reset_start", self._on_reset_start, 10)
         sub(Int16, f"{ns}/task_reset", self._on_task_reset, 10)
+        sub(String, f"{ns}/scenario_info", self._on_scenario_info,
+            QoSProfile(depth=1, reliability=QoSReliabilityPolicy.RELIABLE,
+                       durability=QoSDurabilityPolicy.TRANSIENT_LOCAL))
+        # fallback for an Arena without the scenario_info patch: ask the task generator for task.scenario.file
+        self.param_client = node.create_client(GetParameters, f"{ns}/get_parameters")
+        self.world_dir = self._world_dir(self.launch.get("world", ""))
 
         # Sampling is driven by odometry (~30 Hz, stamped with sim time): we take the first odom message after
         # each 1/rate grid point. A sim-time timer was tried first, but it fires irregularly (whenever /clock
@@ -215,14 +230,14 @@ class Recorder:
 
         world = self.launch.get("world", "")
         # Copy the scenario and the world's map so the run can be replayed even if the world is regenerated.
-        world_dir = REPO / "worlds" / world
-        if not world_dir.is_dir():
-            world_dir = ARENA_WORLDS / world
+        # (Per-scenario maps are copied per episode, only the ones actually used: see _note_scenario.)
+        world_dir = self._world_dir(world)
         scenario_file = world_dir / "scenarios" / self.launch.get("scenario", "default.json")
         if scenario_file.is_file():
             shutil.copy(scenario_file, run_dir / "scenario.json")
         if (world_dir / "map").is_dir():
-            shutil.copytree(world_dir / "map", run_dir / "world", dirs_exist_ok=True)
+            shutil.copytree(world_dir / "map", run_dir / "world", dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns("scenario_maps"))
 
         run_meta = {
             "created": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -230,7 +245,8 @@ class Recorder:
             "local_planner": planner,
             "global_planner": self.launch.get("global_planner", "navfn"),
             "world": world,
-            "scenario": self.launch.get("scenario", "default.json"),
+            "scenario": self.launch.get("scenario", "default.json"),   # the LAUNCH scenario
+            "scenarios": [],              # every scenario file an episode used, in order of first use
             "robot": self.args.robot,
             "robot_radius": self.args.robot_radius,
             "rate_hz": self.args.rate,
@@ -241,6 +257,78 @@ class Recorder:
             json.dump(run_meta, f, indent=2)
         self.run_meta = run_meta
         return run_dir
+
+    @staticmethod
+    def _world_dir(world: str) -> Path:
+        world_dir = REPO / "worlds" / world
+        return world_dir if world_dir.is_dir() else ARENA_WORLDS / world
+
+    def _write_run_meta(self):
+        with open(self.run_dir / "run.json", "w") as f:
+            json.dump(self.run_meta, f, indent=2)
+
+    # ------------------------------------------------------------------ which scenario is this episode?
+    def _on_scenario_info(self, msg: String):
+        try:
+            info = json.loads(msg.data)
+        except ValueError:
+            return
+        if info.get("episode") is None:
+            return
+        self.scenario_infos[int(info["episode"])] = info
+        for k in [k for k in self.scenario_infos if k < int(info["episode"]) - 5]:
+            del self.scenario_infos[k]
+        ep = self.episode
+        if ep is not None and ep.index == int(info["episode"]) and ep.meta.get("scenario_source") != "scenario_info":
+            self._label_episode(ep, info.get("file"), info.get("map"), info.get("map_loaded"), "scenario_info")
+
+    def _label_episode(self, ep, scenario: str, map_rel, map_loaded, source: str):
+        ep.meta.update({"scenario": scenario, "map": map_rel, "map_loaded": map_loaded, "scenario_source": source})
+        ep.write_meta()
+        self._note_scenario(scenario, map_rel)
+        if source != "launch":
+            self.node.get_logger().info(f"episode {ep.index}: scenario {scenario} (map: {map_rel or 'world map'}, "
+                                        f"from {source})")
+
+    def _note_scenario(self, scenario: str, map_rel):
+        """Copy a scenario file (and its map) into the run the first time an episode uses it."""
+        if not scenario or scenario in self.scenarios_copied:
+            return
+        self.scenarios_copied.add(scenario)
+        src = self.world_dir / "scenarios" / scenario
+        if src.is_file():
+            (self.run_dir / "scenarios").mkdir(exist_ok=True)
+            shutil.copy(src, self.run_dir / "scenarios" / scenario)
+        if map_rel:
+            map_yaml = self.world_dir / "map" / map_rel
+            if map_yaml.is_file():
+                dst = self.run_dir / "world" / map_rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(map_yaml, dst)
+                try:
+                    import yaml as _yaml   # Arena's python has PyYAML (ROS needs it)
+                    image = _yaml.safe_load(map_yaml.read_text())["image"]
+                    shutil.copy(map_yaml.parent / image, dst.parent / Path(image).name)
+                except Exception as e:  # noqa: BLE001
+                    self.node.get_logger().warn(f"could not copy the map image of {map_rel}: {e}")
+        self.run_meta["scenarios"].append(scenario)
+        self._write_run_meta()
+
+    def _query_scenario_param(self, ep):
+        """Fallback when no scenario_info arrives (Arena without our patch): read task.scenario.file.
+        Weaker guarantee: the parameter may have changed since the reset (hot-switching)."""
+        if not self.param_client.service_is_ready():
+            return
+        future = self.param_client.call_async(GetParameters.Request(names=["task.scenario.file"]))
+
+        def done(f):
+            try:
+                value = f.result().values[0].string_value
+            except Exception:  # noqa: BLE001
+                return
+            if value and ep.meta.get("scenario_source") == "launch" and ep is self.episode:
+                self._label_episode(ep, value, None, None, "parameter")
+        future.add_done_callback(done)
 
     def now(self) -> float:
         """Current sim time in seconds."""
@@ -284,6 +372,15 @@ class Recorder:
             "wall_start": datetime.datetime.now().isoformat(timespec="seconds"),
         }
         self.episode = Episode(self.run_dir / meta["episode_dir"], index, t, meta)
+        # The scenario this reset applied: normally scenario_info (published before task_reset) is already here;
+        # if it arrives later it relabels the episode in _on_scenario_info.
+        info = self.scenario_infos.get(index)
+        if info is not None:
+            self._label_episode(self.episode, info.get("file"), info.get("map"), info.get("map_loaded"),
+                                "scenario_info")
+        else:
+            meta.update({"map": None, "map_loaded": None, "scenario_source": "launch"})
+            self._query_scenario_param(self.episode)
         # Goals Nav2 already knows about belong to earlier episodes (same trick as our robot_manager patch).
         self._stale_goal_ids = set(self.known_goal_ids)
         self.episode.events.write([t, "episode_start", f"index={index}"])

@@ -5,7 +5,7 @@ the comment `initial-arena-testing`, except the hospital fixes and the two start
 
 | Patch | Upstream repo @ commit | Contents |
 |---|---|---|
-| `arena-rosnav.patch` | `~/arena_ws/src/arena/arena-rosnav` @ `c2ff4a87` | map-callback deadlock fix, HuNav `_wall_segments` init, `localization` + `scenario` launch args, ground-truth mode, episode-reset fixes (stale goal status, spawn-height creep), `timeout: 600`, HuNav phantom-wall fix (wall geometry names + `<ignore_models>`), `rviz` launch arg, pedestrian re-spawn after a reset |
+| `arena-rosnav.patch` | `~/arena_ws/src/arena/arena-rosnav` @ `c2ff4a87` | map-callback deadlock fix, HuNav `_wall_segments` init, `localization` + `scenario` launch args, ground-truth mode, episode-reset fixes (stale goal status, spawn-height creep), `timeout: 600`, HuNav phantom-wall fix (wall geometry names + `<ignore_models>`), `rviz` launch arg, pedestrian re-spawn after a reset, global costmap cleared at every reset, per-scenario maps (`"map"` in the scenario JSON) + `scenario_info` topic |
 | `hunav_gz_plugin.patch` | `~/arena_ws/src/gazebo/hunav_gz_plugin` @ `9492688` | debug-loop removal, `update_rate` honoured + `lastUpdate_` init, immediate `delete_actors` (C++: rebuild `hunav_gz_plugin` after applying) |
 | `simulation-setup.patch` | `~/arena_ws/src/arena/simulation-setup` @ `3f142b25` | hospital world/scenario fixes, Jackal ground-truth pose plugin + `{odom_source}` bridge switch, `bt_navigator.default_server_timeout: 200`, `controller_frequency` substitution, `velocity_smoother` at Jackal limits, goal checker ignores heading, `controllers/dsrnn`, `panel_x*`/`panel_y*` wall-panel models |
 
