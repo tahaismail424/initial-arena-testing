@@ -21,18 +21,16 @@ Last update: 2026-10-11 22:30 UTC
 ## Run data (gitignored, campus_verification/data/)
 | dir | what | status |
 |---|---|---|
-| matrix_dsrnn (+ .csv) | DS-RNN, 5 templates x seeds 0-2 (blind_corner = OLD untimed version) | done: corridor 0/3, door 0/3 (pinned on panels), blind 3/3, intersection 2/3, plaza 3/3 |
-| matrix_dwb (+ .csv) | DWB, 5 templates x seeds 0-2, --prime, timeout 300 | done: 15/15 success |
-| of10_dwb | obstacle_force 10 test (people closer, 0.3 m into panels) -> kept 30 | done |
-| matrix_dsrnn_c | DS-RNN blind_corner s0-2 (timed) + gauntlet s0,s1, timeout 300 | RUNNING (00:02 UTC) |
-| (next) matrix_dwb_g | DWB gauntlet s0,s1, --prime --timeout 900 | todo |
-Analyse: `uv run campus_verification/verify.py <dir> --out <dir>.csv`; params: campus_verification/params_check.txt.
+| matrix_dsrnn (+.csv) | DS-RNN 5 templates x s0-2 | corridor 0/3, door 0/3 (pinned on panel ends: policy), intersection 2/3 (pinned at riser wall end), plaza 3/3; blind = old version (superseded) |
+| matrix_dwb (+.csv) | DWB 5 templates x s0-2, --prime, timeout 300 | 15/15 success |
+| matrix_dsrnn_c (+.csv) | DS-RNN blind s0-2 (timed, old lane), gauntlet s0,s1 | blind 3/3; gauntlets pinned at corridor mouth (5.92, 4.7) at 7-12 s: policy |
+| matrix_dwb_g (+.csv) | DWB gauntlet s0, s1 | s0 success 316.9 s; s1 1st attempt deadlock at inside corner (people pushed into robot+wall 280 s; fixed by lane change 8525b0d), relaunch success 319.6 s |
+| final_dsrnn / final_dwb | rerun of blind_corner s0-2, plaza s0-2, gauntlet s0,s1 on the final generator (8525b0d) | RUNNING (from ~03:40 UTC), chained in one nohup |
+| of10_dwb, tune_forces*, pilot* | force tuning / pilots | done (docs/14 §8 table) |
 
-## In progress (2026-10-12 00:05 UTC)
-- Runs above. Then docs/14 rewrite (all sections except §9/§11) + figures docs/img/campus_*; final report.
-- Infra-domain issues collected in the session scratchpad campus_issues_for_infra.md (also to be listed in
-  docs/14 limitations): HuNav wall-clock integration (speed x 1/RTF, reset throws people up to 8-22 m, through
-  walls), non-cyclic agents segfault the HuNav plugin, int fields dropped, no timeout in arena_batch.
+## In progress
+- docs/14 rewrite: draft of §1-§8 in the session scratchpad doc_head.md (copy to docs/14 then write §10
+  verification + §12 limitations; keep §9 and §11 verbatim). Then README index line, final report.
 
 ## Sims / locks
 - hot_switch.py holds /tmp/arena-sim.lock while running; if the session died: bash scripts/arena-stop.sh;
