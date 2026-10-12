@@ -18,26 +18,21 @@ Last update: 2026-10-11 22:30 UTC
 - `campus_verification/verify.py` (per-episode checks a/b/c), `hot_switch.py` (several scenarios per launch,
   same lock; --timeout, warmup), `reset_jump.py`.
 
-## In progress (2026-10-11 23:00 UTC)
-- Commits so far: be1951f (WIP templates), 7c412da (float fields), 6c3c0b1 (door exit-once wave, lanes, forces
-  20/30), + hot_switch crash-relaunch (this commit).
-- RUNNING: DS-RNN template matrix, seeds 0-2 x 5 templates, 1 ep each, timeout 150 s:
-  `uv run campus_verification/hot_switch.py --planner dsrnn --episodes 1 --timeout 150 --max-minutes 90
-  --out campus_verification/data/matrix_dsrnn <15 scenario files>` (log campus_verification/data/matrix_dsrnn.out).
-  To resume: rerun with the scenarios whose episodes are missing (verify.py lists what exists).
-- Findings: (a) HuNav integrates on WALL time -> pedestrian sim-time speed = desired / RTF (plaza 27 people,
-  RTF 0.71 -> 1.37x); first reset after launch -> 5-8.5 m jump (warmup.json avoids it); int force factors drop
-  agents. Notes for infra: scratchpad campus_issues_for_infra.md (copy into the final report).
-  Ped overlap: head-on on the SAME line (single-file door, same corridor lane) is what makes HuNav people walk
-  through each other -> door_exit is now one-way (exit wave, people leave along the crossing corridor and stop),
-  two-way door loops only for doors >= 1.7 m (gauntlet), corridor lanes always 0.6 m apart, forces 20/30.
-  DS-RNN pins itself on walls/panel corners near people (policy) -> sometimes Gazebo segfaults (hot_switch
-  relaunches).
-- Infra test files (ilt_*, spike_*) removed (also dangling links in ~/arena_ws build/ and install/).
+## Run data (gitignored, campus_verification/data/)
+| dir | what | status |
+|---|---|---|
+| matrix_dsrnn (+ .csv) | DS-RNN, 5 templates x seeds 0-2 (blind_corner = OLD untimed version) | done: corridor 0/3, door 0/3 (pinned on panels), blind 3/3, intersection 2/3, plaza 3/3 |
+| matrix_dwb (+ .csv) | DWB, 5 templates x seeds 0-2, --prime, timeout 300 | done: 15/15 success |
+| of10_dwb | obstacle_force 10 test (people closer, 0.3 m into panels) -> kept 30 | done |
+| matrix_dsrnn_c | DS-RNN blind_corner s0-2 (timed) + gauntlet s0,s1, timeout 300 | RUNNING (00:02 UTC) |
+| (next) matrix_dwb_g | DWB gauntlet s0,s1, --prime --timeout 900 | todo |
+Analyse: `uv run campus_verification/verify.py <dir> --out <dir>.csv`; params: campus_verification/params_check.txt.
 
-## Next
-- DWB template matrix (timeout 300), gauntlet s0,s1 x {dwb (timeout 900), dsrnn (timeout 300)}.
-- Analysis per criterion a/b/c (verify.py + manifest), figures docs/img/campus_*, docs/14 rewrite (not §9/§11).
+## In progress (2026-10-12 00:05 UTC)
+- Runs above. Then docs/14 rewrite (all sections except §9/§11) + figures docs/img/campus_*; final report.
+- Infra-domain issues collected in the session scratchpad campus_issues_for_infra.md (also to be listed in
+  docs/14 limitations): HuNav wall-clock integration (speed x 1/RTF, reset throws people up to 8-22 m, through
+  walls), non-cyclic agents segfault the HuNav plugin, int fields dropped, no timeout in arena_batch.
 
 ## Sims / locks
 - hot_switch.py holds /tmp/arena-sim.lock while running; if the session died: bash scripts/arena-stop.sh;

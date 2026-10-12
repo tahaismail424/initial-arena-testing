@@ -304,8 +304,9 @@ def main():
         run = load_run(run_dir)
         eps = list(run.episodes)
         for k, ep in enumerate(eps):
-            if ep.outcome == "incomplete" or ep.meta.get("scenario") == "warmup.json" or \
-                    (ep.outcome == "reset" and (ep.meta.get("duration") or 0) < 15):
+            primed = (ep.outcome == "reset" and k + 1 < len(eps)
+                      and eps[k + 1].meta.get("scenario") == ep.meta.get("scenario"))
+            if ep.outcome == "incomplete" or ep.meta.get("scenario") == "warmup.json" or primed:
                 continue        # cut short (sim stopped / hot_switch --prime) or the warm-up drive
             try:
                 row = episode_row(ep, cmp)
