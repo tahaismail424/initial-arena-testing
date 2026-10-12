@@ -17,3 +17,5 @@ Status: see the bottom of this file.
 
 ## Status log
 - (start) investigating
+- plugin stamps sim time (hunav_gz_plugin src/HuNavSystemPlugin.cpp, uncommitted on lyu-lab) + bt_node.cpp dt clamp [0, 0.2 s] (hunav_sim new branch lyu-lab, uncommitted); both built. NEXT: verify live (plaza_dense_s0 + hallway_tame), commit, docs.
+- committed: hunav_gz_plugin lyu-lab + hunav_sim lyu-lab (see git log). Verification run: campus_verification/data/simtime_dwb (hot_switch.py, plaza_dense_s0 + door_exit_s0, 2 eps each, no warmup/prime). NEXT: verify.py speed/desired + reset_jump.py on it; then docs/06, docs/14 §12, patches (hunav_sim base a69cf96).
