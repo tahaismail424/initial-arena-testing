@@ -25,7 +25,7 @@ index ba6fe0d..caa98ae 100644
    /// \brief Time of the last update.
    //gz::common::Time lastUpdate_;
 diff --git a/src/HuNavSystemPlugin.cpp b/src/HuNavSystemPlugin.cpp
-index c05aa57..4975a35 100644
+index c05aa57..1e5b931 100644
 --- a/src/HuNavSystemPlugin.cpp
 +++ b/src/HuNavSystemPlugin.cpp
 @@ -75,6 +75,7 @@ void HuNavSystemPluginIGN::Configure(const gz::sim::Entity& _entity, const std::
@@ -145,3 +145,16 @@ index c05aa57..4975a35 100644
    lastUpdate_ = _info.simTime;
  
    // Convert _info.simTime to std::chrono::steady_clock::time_point
+@@ -1692,7 +1733,11 @@ void HuNavSystemPluginIGN::PreUpdate(const gz::sim::UpdateInfo& _info, gz::sim::
+   builtin_interfaces::msg::Time ros_time;
+   ros_time.sec = static_cast<int32_t>(simTime.count());
+   ros_time.nanosec = static_cast<uint32_t>(simTimeNsec.count());
+-  agents.header.stamp = this->rosnode_->get_clock()->now(); //ros_time;
++  // initial-arena-testing: stamp with Gazebo SIM time (was the node clock = wall time). hunav_agent_manager
++  // integrates pedestrian motion over the difference between consecutive stamps, so wall-time stamps made
++  // pedestrians move at desired_speed / RTF in sim time (1.2-1.5x too fast at RTF ~0.7), and mixing them with
++  // Arena's sim-time stamps at a reset produced huge time steps that threw pedestrians through walls.
++  agents.header.stamp = ros_time;
+   std::vector<hunav_msgs::msg::Agent> vector;
+   vector.reserve(pedestrians_.size()); // Reserve space to avoid multiple allocations
+   for (const auto& pair : pedestrians_)

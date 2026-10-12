@@ -532,14 +532,16 @@ Other things to know when writing templates:
 ## 12. Known limitations and open issues
 
 Simulator / infrastructure (not fixable in the scenarios; reported for the Arena/HuNav side):
-1. **HuNav integrates on wall-clock time.** Pedestrian speed in *sim* time = desired / RTF. With 25–50 people the
-   sim runs at RTF 0.65–0.75, so plaza and gauntlet crowds walk 1.3–1.5× faster than their `desired_velocity`
-   (templates with ≤ 20 people: RTF ~0.9–1.0, speeds 0.96–1.05×). `verify.py` reports `speed_ratio` and `rtf`.
-2. **Resets can throw pedestrians.** The first integration step after a reset covers the wall time Gazebo was
-   blocked: usually ~0.7 m, but on some resets 4–22 m, straight through walls (one person spent 146 s outside
-   the floor). It happened on the first reset of a launch and repeatedly on `door_exit_s0`; the gauntlet (~45
-   people) still shows ~3 m after priming. Workaround: `hot_switch.py --prime`; `verify.py` reports
-   `reset_jump` (> 1.5 m = suspect episode). The pedestrian checks skip the first 1 s.
+1. ~~**HuNav integrates on wall-clock time.**~~ **Fixed 2026-10-12** (hunav_gz_plugin `41de5b2`, hunav_sim
+   `225ac77`, both on `lyu-lab`). The plugin stamped its requests with the wall clock, while the agent manager
+   integrates motion over the difference between consecutive stamps. Pedestrian speed in sim time was therefore
+   desired / RTF: 1.3–1.5× too fast in the plaza and gauntlet (RTF 0.65–0.75). The plugin now stamps with Gazebo
+   sim time, and the step is clamped to [0, 0.2 s]. Verified: plaza at RTF 0.69 → `speed_ratio` 0.95 (was
+   1.22–1.39); door 0.98. The numbers in §11 were measured before the fix.
+2. ~~**Resets can throw pedestrians.**~~ **Fixed by the same change.** At resets, the plugin's wall-time stamps
+   mixed with the task generator's sim-time stamps, giving huge time steps that threw people 4–22 m, through
+   walls. After the fix, the first-sample displacement is ≤ 0.09 m on every reset, including the first reset of
+   a launch without a warm-up. `--prime` and `warmup.json` are no longer needed, but are harmless.
 3. **`cyclic_goals: false` crashes the HuNav Gazebo plugin** once an agent reaches its last goal (segfault in
    `HuNavSystemPluginIGN::PreUpdate`, the launch dies). All campus routes loop.
 4. **Integer HuNav fields drop the agent silently.** The generator coerces and checks.

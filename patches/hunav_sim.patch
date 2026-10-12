@@ -1,0 +1,35 @@
+diff --git a/hunav_agent_manager/src/bt_node.cpp b/hunav_agent_manager/src/bt_node.cpp
+index 63ef00e..c35df73 100644
+--- a/hunav_agent_manager/src/bt_node.cpp
++++ b/hunav_agent_manager/src/bt_node.cpp
+@@ -1,4 +1,8 @@
+ #include "hunav_agent_manager/bt_node.hpp"
++#include <algorithm>
++
++// initial-arena-testing: upper bound for one integration step (s, sim time)
++static constexpr double MAX_TIME_STEP = 0.2;
+ 
+ // BT_REGISTER_NODES(factory) {
+ //   hunav_agent_manager::registerBTNodes(factory);
+@@ -328,9 +332,10 @@ void BTnode::computeAgentsService(const std::shared_ptr<hunav_msgs::srv::Compute
+     publish_people(t, ag);
+ 
+   double time_step_secs = (rclcpp::Time(ag->header.stamp) - prev_time_).seconds();
+-  // if the time was reset, we get a negative value
+-  if (time_step_secs < 0.0)
+-    time_step_secs = 0.0;  // 0.05
++  // initial-arena-testing: stamps are sim time (hunav_gz_plugin + task generator). Never step backwards (time
++  // reset), and never integrate more than MAX_TIME_STEP at once: a stale prev_time_ after a reset or pause would
++  // otherwise throw pedestrians metres in one update.
++  time_step_secs = std::clamp(time_step_secs, 0.0, MAX_TIME_STEP);
+ 
+   BT::NodeStatus status = tree_tick(time_step_secs);
+   prev_time_ = rclcpp::Time(ag->header.stamp);
+@@ -394,6 +399,7 @@ void BTnode::moveAgentService(const std::shared_ptr<hunav_msgs::srv::MoveAgent::
+     publish_people(t, ag);
+ 
+   double time_step_secs = (rclcpp::Time(ag->header.stamp) - prev_time_).seconds();
++  time_step_secs = std::clamp(time_step_secs, 0.0, MAX_TIME_STEP);  // initial-arena-testing: see above
+   // time_step_secs = 0.1;
+ 
+   // RCLCPP_INFO(this->get_logger(), "Time step computed: %.4f",

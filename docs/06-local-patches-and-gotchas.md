@@ -51,7 +51,14 @@ These live in the upstream checkouts. A `git pull` / `vcs import` / reinstall co
 | `src/HuNavSystemPlugin.cpp` `PreUpdate` | Commented out a leftover debug loop that logged every entity every step | Pure overhead |
 | same + `include/.../HuNavSystemPlugin.h` | `lastUpdate_` initialised to 0, and a negative `dt` never counts as "too soon" | **Bug in our first update_rate patch:** `lastUpdate_` was uninitialised, so on the CPU VM garbage made `dt` negative and the plugin skipped every step. Pedestrians stood still from episode 1 (found 2026-10-09). |
 | same (`deleteActorsCallback`) | Removes actors immediately (also not-yet-initialised ones) instead of on the next physics step | Closes a race where Arena's re-spawn could be rejected because the old actor with the same name still existed ([13](13-pedestrian-reset-fix.md)) |
+| same (`PreUpdate`, compute_agents request) | Stamp with Gazebo **sim time** instead of the node's wall clock | HuNav integrated pedestrian motion over wall-clock stamp differences: pedestrians walked at desired / RTF (1.3–1.5× too fast in busy scenes), and resets (where the task generator sends sim-time stamps) threw people metres through walls ([14 §12](14-campus-world.md#12-known-limitations-and-open-issues)) |
 | same | `<update_rate>` is now honoured (steps are skipped below the rate) | Upstream parsed it but never used it. With the value at 1000 nothing changes; lower values speed the sim up but slowed pedestrians ([09 §5](09-hallway-scenarios.md#5-performance-notes--running-faster-than-real-time)) |
+
+### hunav_sim (`~/arena_ws/src/deps/hunav/hunav_sim`, branch `lyu-lab`; C++, rebuild `hunav_agent_manager`)
+
+| File | Change | Why |
+|---|---|---|
+| `hunav_agent_manager/src/bt_node.cpp` | Integration step clamped to [0, 0.2 s] in both compute services | One path had no clamp at all; a stale or mixed-clock stamp could integrate seconds in one step and throw pedestrians |
 
 See the current state any time with:
 

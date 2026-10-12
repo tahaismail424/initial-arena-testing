@@ -6,7 +6,8 @@ the comment `initial-arena-testing`, except the hospital fixes and the two start
 | Patch | Upstream repo @ commit | Contents |
 |---|---|---|
 | `arena-rosnav.patch` | `~/arena_ws/src/arena/arena-rosnav` @ `c2ff4a87` | map-callback deadlock fix, HuNav `_wall_segments` init, `localization` + `scenario` launch args, ground-truth mode, episode-reset fixes (stale goal status, spawn-height creep), `timeout: 600`, HuNav phantom-wall fix (wall geometry names + `<ignore_models>`), `rviz` launch arg, pedestrian re-spawn after a reset, global costmap cleared at every reset, per-scenario maps (`"map"` in the scenario JSON) + `scenario_info` topic |
-| `hunav_gz_plugin.patch` | `~/arena_ws/src/gazebo/hunav_gz_plugin` @ `9492688` | debug-loop removal, `update_rate` honoured + `lastUpdate_` init, immediate `delete_actors` (C++: rebuild `hunav_gz_plugin` after applying) |
+| `hunav_gz_plugin.patch` | `~/arena_ws/src/gazebo/hunav_gz_plugin` @ `9492688` | debug-loop removal, `update_rate` honoured + `lastUpdate_` init, immediate `delete_actors`, sim-time stamps (C++: rebuild `hunav_gz_plugin` after applying) |
+| `hunav_sim.patch` | `~/arena_ws/src/deps/hunav/hunav_sim` @ `a69cf96` | integration-step clamp in `hunav_agent_manager` (rebuild `hunav_agent_manager`) |
 | `simulation-setup.patch` | `~/arena_ws/src/arena/simulation-setup` @ `3f142b25` | hospital world/scenario fixes, Jackal ground-truth pose plugin + `{odom_source}` bridge switch, `bt_navigator.default_server_timeout: 200`, `controller_frequency` substitution, `velocity_smoother` at Jackal limits, goal checker ignores heading, `controllers/dsrnn`, `panel_x*`/`panel_y*` wall-panel models |
 
 Not in the patches (untracked files): the `*.before-*` backups, and `worlds/school_hallway/`, which contains per-file
@@ -20,6 +21,7 @@ cd ~/Documents/Lyu_Lab/initial-arena-testing
 git -C ~/arena_ws/src/arena/arena-rosnav diff c2ff4a87 lyu-lab > patches/arena-rosnav.patch
 git -C ~/arena_ws/src/arena/simulation-setup diff 3f142b25 lyu-lab -- . ':(exclude)worlds/school_hallway' > patches/simulation-setup.patch
 git -C ~/arena_ws/src/gazebo/hunav_gz_plugin diff 9492688 lyu-lab > patches/hunav_gz_plugin.patch
+git -C ~/arena_ws/src/deps/hunav/hunav_sim diff a69cf96 lyu-lab > patches/hunav_sim.patch
 ```
 
 ## Re-apply on a fresh checkout / after an Arena update
