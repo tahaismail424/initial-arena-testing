@@ -24,7 +24,7 @@ Arena's upstream docs describe older versions in places. When the docs and the c
 | 11 | [DS-RNN native sim tour](docs/11-dsrnn-native-sim-tour.md) | Visualizing DS-RNN, what code actually runs, observation/action/reward, configurables, porting notes |
 | 12 | [Recording & playback](docs/12-recording-and-playback.md) | Record every episode to CSV (`--record`), file format, `arena_analysis` metrics API, video/notebook replay |
 | 13 | [Pedestrian reset fix](docs/13-pedestrian-reset-fix.md) | Why pedestrians vanished after episode 1, the two-repo fix, and how it was verified |
-| 14 | [Campus world guide](docs/14-campus-world.md) | Build one stress-test world (counterflow, doorway, blind corner, intersection, plaza) and a procedural scenario generator: boilerplate + steps |
+| 14 | [Campus world](docs/14-campus-world.md) | One stress-test world (counterflow corridor, doorway, blind corner, intersection, dense plaza, gauntlet), the procedural scenario generator, and its verification with DWB and DS-RNN (`campus_verification/`) |
 
 ## Quick start
 

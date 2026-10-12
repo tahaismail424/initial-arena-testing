@@ -206,8 +206,11 @@ parameters. Building blocks used by all templates:
   along its east wall, y 5.5–16.5); 4.5–5 leaves the full 5 m.
 - **Robot:** corridor_mid (18, 2.5) → the riser at y = 12 (centred in the possibly narrowed riser).
 - **Crowd:** `n` people loop: down the riser's west side, round the **inside** of the corner (1 m from the hidden
-  wall corner, where the robot turns), west along the corridor's north half to x 24–27, back east along the south
-  half, up the east side, cross over at y 14–17 (≥ 2 m above the robot's goal).
+  wall corner, where the robot turns), west along the corridor at y 2.8–3.6 to x 24–27, back east along the
+  south half, up the east side, cross over at y 14–17 (≥ 2 m above the robot's goal). The westbound lane stays
+  ≥ 1.4 m off the north wall: planners hug that wall round the inside corner, and with the lane on that line a
+  stopped DWB robot sat on the walkers' turn point and they pushed into it for minutes (HuNav people can't
+  route around an obstacle).
 - **Timing:** the first walkers are **timed**: placed so they reach the corner at a time drawn from each
   `arrive_at` window ([8, 14] s for DS-RNN's arrival, [35, 55] s for DWB's); the rest are uniform along the loop.
   DWB saw 4–11 people come round the corner while it was within the corner window.
@@ -389,13 +392,56 @@ stream crossings, door passages, people within 2 m).
 
 ### 10.2 Results
 
-RESULTS_TABLE
+| template | planner | episodes | success | time (s, median) | robot-person contacts | min clearance (m) | min wall/panel clear. (m) | freeze (s, median) | ped. inside wall (samples) | ped. overlap share | ped. overlaps >= 2 s | stuck peds | speed / desired | RTF |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| blind_corner | dsrnn | 3 | 2/3 | 23.8 | 0 | 0.15 | -0.05 | 0.0 | 0 | 1% | 0 | 0 | 1.0 | 0.99 |
+| blind_corner | dwb | 3 | 3/3 | 85.3 | 0 | 0.25 | -0.0 | 0.0 | 0 | 1% | 0 | 0 | 1.0 | 0.99 |
+| corridor_counterflow | dsrnn | 3 | 0/3 | 140.3 | 0 | 0.46 | -0.19 | 132.6 | 0 | 4% | 2 | 0 | 0.98 | 0.99 |
+| corridor_counterflow | dwb | 3 | 3/3 | 105.8 | 0 | 0.27 | 0.22 | 0.0 | 0 | 8% | 9 | 0 | 0.96 | 0.99 |
+| door_exit | dsrnn | 3 | 0/3 | 150.4 | 0 | 0.89 | -0.2 | 142.8 | 0 | 6% | 12 | 0 | 0.99 | 0.99 |
+| door_exit | dwb | 3 | 3/3 | 77.4 | 0 | 0.26 | 0.04 | 0.0 | 0 | 7% | 13 | 0 | 1.01 | 0.91 |
+| gauntlet | dsrnn | 2 | 0/2 | 300.6 | 0 | 0.37 | -0.17 | 269.1 | 0 | 4% | 15 | 0 | 1.49 | 0.67 |
+| gauntlet | dwb | 2 | 2/2 | 316.7 | 0 | 0.25 | 0.01 | 0.0 | 0 | 4% | 4 | 0 | 1.5 | 0.66 |
+| intersection | dsrnn | 3 | 2/3 | 25.7 | 0 | 0.28 | -0.12 | 0.0 | 0 | 0% | 0 | 0 | 0.99 | 0.97 |
+| intersection | dwb | 3 | 3/3 | 66.4 | 0 | 0.39 | 1.61 | 0.0 | 0 | 1% | 0 | 0 | 1.0 | 0.98 |
+| plaza_dense | dsrnn | 3 | 3/3 | 26.5 | 0 | 0.34 | 0.66 | 0.0 | 0 | 4% | 0 | 0 | 1.22 | 0.74 |
+| plaza_dense | dwb | 3 | 3/3 | 76.4 | 1 | -0.14 | 3.8 | 0.0 | 0 | 4% | 0 | 0 | 1.39 | 0.69 |
+
+One episode per (scenario, planner), seeds 0–2 per template and 0–1 for the gauntlet (`summarize.py`; episodes
+whose reset threw people > 1.5 m are left out of the pedestrian columns). "ped. overlap share" = share of
+pedestrian-time with someone < 0.4 m centre to centre (bodies 2 × 0.35 m). Speed / desired is in sim time; it
+follows 1/RTF (§12).
+
+**Gauntlet, DWB:** 312.0 s and 321.4 s (empty gauntlet: 318.8 s). Every zone was busy when DWB got there
+(s0 / s1): 22 / 31 head-on passes and 16 / 24 overtakes in the narrow corridor, 7 / 14 people round the corner,
+32 / 53 stream crossings per minute at the intersection, 11 / 14 exits and 12 / 14 entries through the door while
+DWB was within 3 m of it, 3.8 / 2.4 people within 2 m on average in the plaza. **DS-RNN** wedged itself at the
+corridor mouth (s1, after 6 s) and against the riser wall below the door, in the exiting/entering crowd (s0, after
+59 s).
 
 ![closest approaches, DWB, and the typical DS-RNN failure](img/campus_stress_frames.png)
 
 ### 10.3 (a) Is the human behaviour typical?
 
-HUMANS_TEXT
+**Yes, within the limits of HuNav (§8, §12).** Over all counted episodes:
+- **Nobody inside walls or panels** (centre outside the free space: 0 samples) except when the simulator put them
+  there: two episodes where a reset threw people metres through walls (`door_exit_s0`, one person 146 s outside
+  the floor; flagged by `reset_jump`, excluded) and one robot squeeze (DS-RNN pressed a person 0.53 m into the
+  corridor wall for 0.9 s, `blind_corner_s1`, old lane layout). Deepest body overlap with a panel otherwise ≤ 0.2 m
+  (brushing door frames and panel ends).
+- **Pedestrian-pedestrian interpenetration** 0–8% of pedestrian-time below 0.4 m centre distance (it was 21–24% in
+  the door and corridor flows before the force/lane fixes, §8). Overlaps lasting ≥ 2 s: 0–15 per episode, almost
+  all in queues (door wave, corridor turnarounds, gauntlet door).
+- **No stuck agents** (standing ≥ 10 s away from their waypoints without the robot in the way) in the final
+  scenarios. Found and fixed: plaza walkers dithering on legs < 3 m; the deadlock at the inside corner (§10.5).
+- **Speeds:** walking speed / desired_velocity 0.96–1.05 in the templates with ≤ 20 people; 1.2–1.5 in the plaza
+  and the gauntlet, exactly 1/RTF (HuNav runs on wall time, §12).
+- **Flows go where intended** (zone metrics while the robot was there): the exit crowd leaves through the door
+  (DWB at the door: 7–18 exits, 0–3 entries), streams cross at the intersection (31–53 crossings/min), people come
+  round the blind corner while the robot approaches (DWB 4–14 per pass; DS-RNN gets timed walkers at 8–14 s),
+  the corridor has 22–33 head-on passes during DWB's ~65 s in the narrow part, the plaza has 2.4–5.7 people
+  within 2 m of the robot on average.
+- Known artifact: the post-reset jump. Typically ~0.7 m in the first second, excluded by skipping 1 s.
 
 ### 10.4 (b) Do scenarios respond to their parameters, and vary across seeds?
 
@@ -406,21 +452,23 @@ HUMANS_TEXT
   44 / 38 riser crossings per minute; `blind_corner` 4 / 11 / 5 people round the corner during DWB's pass; plaza
   4.6 / 5.7 / 4.7 people within 2 m on average. The global plans move with the door: first crossings of y = 30
   at x = 32.2 / 33.1 / 33.1, i.e. inside each seed's door.
-- Outcomes vary across seeds for DS-RNN (min clearance 0.21–1.67 m, success/pin) but **hardly for DWB**: its
-  times are within ±2 s per template (corridor 105–107 s, door 76–79 s, corner 86–87 s). DWB drives at its
+- Outcomes vary across seeds for DS-RNN (min clearance 0.15–0.89 m, success or pinned) but **hardly for DWB**: its
+  times are within ±2 s per template (corridor 105–107 s, door 76–79 s, corner 84–87 s, plaza 76–77 s). DWB drives at its
   0.26 m/s limit almost without stopping (freezing ≤ 2 s) because HuNav people swerve around the robot as an
   obstacle (§8). Variation in DWB outcomes needs reactive pedestrians, not different scenarios.
 
 ### 10.5 (c) Can the Jackal succeed in every scenario?
 
-- **Yes, every scenario is solvable:** DWB succeeded in every template and seed and in both gauntlets
-  (316.9 s and 319.6 s, the same as the empty gauntlet's 318.8 s). Spawn points are clear (start error ≤ 0.04 m for DWB,
+- **Yes, every scenario is solvable:** DWB succeeded in every template and seed (15/15) and in both gauntlets
+  (312.0 s and 321.4 s; the empty gauntlet takes 318.8 s). Spawn points are clear (start error ≤ 0.04 m for DWB,
   `check_scenario` keeps start/goal ≥ 0.5 m off panels and people ≥ 1.5 m away), goals are reachable, and
-  **every recorded global plan crosses y = 30 inside the door** (100% of 400+ plans, `plan_check.py`).
+  **every recorded global plan crosses y = 30 inside the door** (2012 of 2012 plans, all door and gauntlet episodes, `plan_check.py`).
 - **Every DS-RNN failure is a policy failure:** the robot wedges itself on a wall or panel end when it swerves
   away from people (it never sees walls; it only follows the plan's 4 m subgoal). Locations: the mouth of the
-  narrowed corridor (x ≈ 5.9, all 3 corridor runs and both gauntlets, within 7–12 s), under the door blocks
-  (all 3 door runs), the riser wall end at the intersection (1/3). Contacts with people: none.
+  narrowed corridor (x ≈ 5.9, all 3 corridor runs and 3 of 4 gauntlet runs, within 6–12 s), under the door
+  blocks (all 3 door runs), the riser wall below the door (1 gauntlet), the riser wall end at the intersection
+  (1/3), the corridor's north wall while swerving from corner walkers (1/3 blind corner). Contacts with people:
+  none (DWB: 1 brief contact, plaza_dense_s2, −0.14 m).
 - **Scenario/setup problems found and fixed:** pedestrians dropped by integer force factors; HuNav plugin crash
   with non-cyclic agents; head-on overlaps in single-file doors (exit wave); corridor lanes on one line; plaza
   walkers dithering on short legs; a deadlock in the gauntlet where the corner walkers' lane ran along the line
