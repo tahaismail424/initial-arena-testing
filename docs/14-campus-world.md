@@ -1,21 +1,28 @@
-# 14. Building the campus stress-test world (guide)
+# 14. The campus stress-test world
 
-A hands-on guide for building **one world that contains every stress scenario** (narrow corridor with counterflow,
-doorway against an exiting crowd, blind corner, intersection with crossing streams, dense plaza), plus a
-**procedural scenario generator** that turns parameter ranges and a seed into Arena scenarios.
+**One world that contains every crowd-navigation stress situation** (a narrowed corridor with two-way traffic, a
+doorway against an exiting crowd, a blind corner, an intersection with crossing streams, a dense plaza), plus a
+**procedural scenario generator** that turns parameter ranges and a seed into Arena scenarios, and the tools that
+verify them in simulation. Built and verified 2026-10-11/12 (DWB and DS-RNN, §10).
 
-You write the interesting parts. The boilerplate has the plumbing done and `TODO`s where your code goes:
+| File | What it is |
+|---|---|
+| [`scripts/generate_campus.py`](../scripts/generate_campus.py) | Builds the world shell → `worlds/campus/` (map, walls, zones, `default.json`, `warmup.json`) |
+| [`scripts/generate_campus_scenario.py`](../scripts/generate_campus_scenario.py) | Templates + parameters + seed → scenario JSON, preview, per-scenario Nav2 map, `manifest.csv`; static checks |
+| [`scenarios/campus/stress.yaml`](../scenarios/campus/stress.yaml) | The spec: templates, parameter ranges, HuNav defaults |
+| `worlds/campus/` | Generated output (don't edit by hand). Seeds 0–4 of every template are committed |
+| [`campus_verification/`](../campus_verification/) | `verify.py` (per-episode checks), `params_check.py`, `plan_check.py`, `reset_jump.py`, `hot_switch.py` (runner with warm-up / priming / timeout) |
 
-| File | What it is | Your part |
-|---|---|---|
-| [`scripts/generate_campus.py`](../scripts/generate_campus.py) | Builds the world shell → `worlds/campus/` | 4 small `TODO`s (steps 1–3) |
-| [`scripts/generate_campus_scenario.py`](../scripts/generate_campus_scenario.py) | Builds scenarios: template + parameters + seed → JSON | 4 templates + the gauntlet (one worked example included) |
-| [`scenarios/campus/stress.yaml`](../scenarios/campus/stress.yaml) | Spec: which templates, parameter ranges, HuNav defaults | add a block per template you write |
-| `worlds/campus/` | Generated output (map, walls, zones, scenarios, previews) | generated, don't edit by hand |
-
-Prerequisites: [04](04-configuring-sim-and-robot.md) (worlds, scenarios, the YAML merge chain),
-[09](09-hallway-scenarios.md) (scenario JSON fields and HuNav pitfalls). `generate_hallway.py` and
-`generate_scenario.py` are the hallway versions of these scripts and are worth reading first.
+TL;DR:
+```bash
+uv run scripts/generate_campus.py --link                                     # world (once)
+uv run scripts/generate_campus_scenario.py scenarios/campus/stress.yaml --seeds 0 29 --link
+cd ~/arena_ws && source arena.bash && colcon build --symlink-install --packages-select arena_simulation_setup
+cd ~/Documents/Lyu_Lab/initial-arena-testing
+uv run campus_verification/hot_switch.py --planner dwb --prime --timeout 300 --out ~/arena_runs/campus_dwb \
+    door_exit_s0.json door_exit_s1.json blind_corner_s0.json                 # several scenarios, one launch
+uv run campus_verification/verify.py ~/arena_runs/campus_dwb --out table.csv  # checks + stress metrics
+```
 
 ---
 
@@ -23,86 +30,63 @@ Prerequisites: [04](04-configuring-sim-and-robot.md) (worlds, scenarios, the YAM
 
 | Layer | Files | Changes when | Contains |
 |---|---|---|---|
-| **World** | `worlds/<w>/map/map.png`, `map.yaml`, `walls.yaml` | Only at launch. A *new* world folder also needs a rebuild of `arena_simulation_setup` | The building's walls. Gazebo builds wall boxes from `walls.yaml`; Nav2 plans on `map.png` |
-| **Scenario** | `worlds/<w>/scenarios/<s>.json` | Every launch (pick with `scenario:=<s>.json`), no rebuild | Robot start and goal; pedestrians (start, waypoints, speed, HuNav behaviour, groups); **static obstacles** |
+| **World** | `worlds/campus/map/map.png`, `map.yaml`, `walls.yaml` | Only at launch | The building's walls. Gazebo builds wall boxes from `walls.yaml`; Nav2 plans on the map |
+| **Scenario** | `worlds/campus/scenarios/<s>.json` (+ `map/scenario_maps/<s>.{png,yaml}`) | Every reset (hot-switchable, §9) | Robot start and goal; pedestrians (start, waypoints, speed, HuNav behaviour, groups); wall **panels**; its own Nav2 map with the panels drawn in |
 
-The trick for "one world, many geometries": the world shell is **generous** (5 m-wide corridors, a 5 m-wide door
-opening). Each scenario **narrows it** by spawning wall panels as static obstacles. A 2.2 m corridor and a 3.8 m
-corridor are then two scenario files, not two worlds.
+The trick for "one world, many geometries": the shell is **generous** (5 m-wide corridors, a 5 m-wide door
+opening). Each scenario **narrows it** with wall panels (static obstacles). A 2.2 m corridor and a 3.8 m corridor
+are two scenario files, not two worlds.
 
-How Arena finds things: `arena-launch.sh campus scenario scenario:=door_exit_s3.json` (world `campus`) →
-`~/arena_ws/src/arena/simulation-setup/worlds/campus/{map,scenarios}/`. Our files live in this repo and are
-**symlinked** there file by file (`--link`, see `link_into_arena()` in `generate_hallway.py`). The rules:
-- **Editing** a file that is already linked → nothing else needed (symlink install).
-- **A new file** (a new world, or new scenario files) → re-link (`--link`) **and** rebuild:
-  `cd ~/arena_ws && source arena.bash && colcon build --symlink-install --packages-select arena_simulation_setup`
-  (~25 s).
+Our files live in this repo and are **symlinked** into `~/arena_ws/src/arena/simulation-setup/worlds/campus/` file
+by file (`--link`). Editing a linked file needs nothing else; **new** files need `--link` and a rebuild of
+`arena_simulation_setup` (~25 s). **Deleting** a linked file also leaves dangling links in
+`~/arena_ws/build/arena_simulation_setup` and `install/` that make the next build fail ("can't copy ... doesn't
+exist"): `find ~/arena_ws/build/arena_simulation_setup ~/arena_ws/install/arena_simulation_setup -xtype l -delete`.
 
 ---
 
-## 2. The proposed layout
+## 2. The layout as built
 
 ![campus layout](img/campus_layout.png)
 
-(Generated by the finished `generate_campus.py`; yours will look the same once steps 1–3 are done.)
-
-| Zone | Rectangle (x0, y0, x1, y1) | Stress |
+| Zone | Rectangle (x0, y0, x1, y1) | Used by |
 |---|---|---|
-| `corridor` | (0, 0, 35, 5) | **Counterflow** in a corridor narrowed by panels. Its east end, where it meets the riser, is the **blind corner** |
-| `riser` | (30, 0, 35, 30) | Vertical corridor linking everything. Crosses the `crossing` corridor = the **intersection** |
-| `crossing` | (12, 18, 53, 23) | East-west corridor with **crossing streams** |
-| `plaza` | (20, 30, 48, 52) | **Dense plaza**. Its south wall has the **door** (x 30–35 at y = 30), narrowed by panels |
+| `corridor` | (0, 0, 35, 5) | `corridor_counterflow` (narrowed x 6–22); its east end (x 30–35) is the **blind corner** |
+| `riser` | (30, 0, 35, 30) | `blind_corner` (y < 17), `door_exit` (y 23–30), the robot's way north |
+| `crossing` | (12, 18, 53, 23) | `intersection` (streams), `door_exit` (exit wave disperses here) |
+| `plaza` | (20, 30, 48, 52) | `plaza_dense`; its south wall has the **door** (shell opening x 30–35 at y = 30) |
 
-**Anchors** are named points the scenario generator uses for robot tasks and routes (`corridor_west`, `corner`,
-`intersection`, `below_door`, `plaza_far`, …), written to `worlds/campus/zones.yaml`. The **gauntlet** task
-(`corridor_west` → `plaza_far`) passes through every zone: about 80 m, ~100 s for DS-RNN and ~6 min for DWB.
+The union is one hole-free polygon (a tree of rectangles): 1096 m² of floor, 18 axis-aligned wall segments, a
+1100 × 1080 px map at 0.05 m. `generate_campus.py` checks connectivity, holes and axis alignment.
 
-Design rules baked into the layout (each one is a lesson from the hallway):
-- **Everything axis-aligned.** HuNav computes obstacle forces from axis-aligned bounding boxes; rotated walls
-  created phantom walls ([09 §4](09-hallway-scenarios.md#4-pitfalls-we-hit-and-the-fix-in-the-generator)).
-- **Goals ≥ 3 m from walls.** DS-RNN overshoots goals and pinned itself on a wall 1 m behind the goal
-  ([first experiment](../first_experiment/README.md)).
-- **A tree, not a loop.** Zones connect without enclosing a hole, so the outline is one ring and
-  `gen_walls()` from the hallway generator works unchanged. (A loop is possible; see the step 1 hints.)
-- **Zones are separated.** Each template keeps its pedestrians inside its own zone, so the five stress situations
-  stay independent and can be combined (the gauntlet) or run alone.
+**Anchors** (`worlds/campus/zones.yaml`): `corridor_west` (2, 2.5), `corridor_mid` (18, 2.5), `corridor_east`
+(26, 2.5), `corner` (32.5, 2.5), `riser_mid` (32.5, 12), `intersection` (32.5, 20.5), `crossing_west` (14, 20.5),
+`crossing_east` (51, 20.5), `below_door` (32.5, 26), `above_door` (32.5, 34), `plaza_center` (34, 41),
+`plaza_far` (44, 48).
 
-Change the layout by editing `ZONES` / `DOOR` / `ANCHORS` at the top of `generate_campus.py`.
+Scenarios of the world itself:
+- `default.json`: the **gauntlet task** (corridor_west → plaza_far, ~80 m) with nobody else. DWB drives it in
+  **318.8 s** (checkpoint, 2026-10-11).
+- `warmup.json`: a 4 m drive, nobody else. `hot_switch.py` launches with it and then switches (§10.1).
+
+Design rules (each one a lesson from the hallway): everything axis-aligned (HuNav's obstacle boxes are
+axis-aligned, rotated walls became phantom walls, [09 §4](09-hallway-scenarios.md)); a tree, not a loop (one outer
+ring, `gen_walls()` works unchanged); zones separated so templates can run alone or together (the gauntlet). Goals
+are ≥ 3 m from walls *ahead* of the robot where the zone allows it (the corridors are 5 m wide, so corridor goals
+are 2.5 m from the side walls, but never facing an end wall).
 
 ---
 
-## 3. Build the world shell (your TODOs in `generate_campus.py`)
+## 3. Building the world (`generate_campus.py`)
 
-Read `write_campus_world()` first: it calls your functions in order, then the finished helpers.
-
-**Step 1: `build_free_space(zones)`.** Union the zone rectangles into ONE shapely `Polygon`: the walkable floor.
-Raise a clear error if the result is a `MultiPolygon` (some zone isn't touching the rest). *Hint:* `box()` and
-`shapely.union_all()`, exactly like `gen_blocks()` / `write_hallway_world()` in `generate_hallway.py`.
-
-**Step 2: `build_walls(free)` and step 2b: `save_map_png_with_holes(...)`.** For the tree layout these are
-one-liners that call the hallway versions (`gen_walls`, `save_map_png`). The interesting part is understanding
-*why* they work: read their docstrings (half-thickness offset, mitre joins, image rows vs map y). Guard against
-holes (`free.interiors`) with a clear error.
-
-**Step 3: `save_default_scenario(world_dir)`.** `default.json` with the gauntlet start/goal and no pedestrians, so
-you can drive the empty world first.
-
-**Checkpoint A: look at it.**
 ```bash
-uv run scripts/generate_campus.py
-xdg-open worlds/campus/preview.png      # red walls hug the black band? zone labels + anchors where expected?
+uv run scripts/generate_campus.py          # writes worlds/campus/ (map, walls, zones.yaml, default/warmup, preview.png)
+uv run scripts/generate_campus.py --link   # ...and links map/ + scenarios/ into Arena (then rebuild, §1)
 ```
-
-**Checkpoint B: drive it.**
-```bash
-uv run scripts/generate_campus.py --link
-cd ~/arena_ws && source arena.bash && colcon build --symlink-install --packages-select arena_simulation_setup
-cd ~/Documents/Lyu_Lab/initial-arena-testing
-bash scripts/arena-launch.sh --record campus scenario scenario:=default.json rviz:=false local_planner:=dwb
-```
-DWB should drive the whole gauntlet (about 80 m, ~6 min at 0.26 m/s). Watch it in Gazebo; afterwards play it back
-(`uv run scripts/playback.py ~/arena_runs/<run>/episode_000`). If the robot spawns inside a wall or the plan
-looks wrong, `map.yaml`'s origin and `walls.yaml` disagree. Compare with `preview.png`.
+`build_free_space` unions `ZONES` (error if a zone is disconnected or the zones enclose a hole), `build_walls`
+pushes the outline out by half a wall thickness (`gen_walls` from the hallway generator; the clear widths stay
+exact) and asserts every segment is axis-aligned, `save_map_png_with_holes` paints the floor white. Change the
+layout by editing `ZONES` / `DOOR` / `ANCHORS` at the top; the templates read everything from `zones.yaml`.
 
 ---
 
@@ -110,147 +94,214 @@ looks wrong, `map.yaml`'s origin and `walls.yaml` disagree. Compare with `previe
 
 ```json
 {
-  "robots": [{"start": [2.0, 2.5, 0.0], "goal": [44.0, 48.0, 0.0]}],
+  "robots": [{"start": [32.5, 24.5, 0.0], "goal": [34.0, 41.0, 0.0]}],
   "obstacles": {
-    "static":  [{"name": "panel_x4_0", "model": "panel_x4", "pos": [8.0, 0.1, 0.0]}, "..."],
-    "dynamic": [{"name": "oncoming_0", "model": "actor1", "type": 1,
-                 "pos": [12.3, 2.4, 0.0], "waypoints": [[4.1, 2.6, 0.0], [28.8, 2.2, 0.0]],
-                 "desired_velocity": 1.2, "group_id": -1, "radius": 0.35, "goal_radius": 0.6,
-                 "cyclic_goals": true,
-                 "behavior": {"type": 1, "social_force_factor": 5.0, "obstacle_force_factor": 10.0}}],
+    "static":  [{"name": "panel_y1_0", "model": "panel_y1", "pos": [30.1, 30.0, 0.0]}, "..."],
+    "dynamic": [{"name": "exiting_0", "model": "actor1", "type": 1,
+                 "pos": [44.2, 38.1, 0.0], "waypoints": [[31.3, 31.4, 0.0], [31.3, 30.0, 0.0], "..."],
+                 "desired_velocity": 1.02, "group_id": -1, "class": "exiting",
+                 "radius": 0.35, "goal_radius": 0.6, "cyclic_goals": true,
+                 "behavior": {"type": 1, "social_force_factor": 20.0, "obstacle_force_factor": 30.0}}],
     "interactive": []
-  }
+  },
+  "map": "scenario_maps/door_exit_s0.yaml"
 }
 ```
-- `static`: models from `simulation-setup/entities/obstacles/static/<model>/sdf/<model>.sdf`; `pos` = [x, y, yaw]
-  (yaw in radians). `obstacles.interactive` is treated exactly like `static`. A misspelt model doesn't crash
-  anything: Arena logs `Error spawning entity` and the obstacle is silently missing, so check the previews and
-  the launch log.
-- `dynamic`: HuNav pedestrians. The gotchas from [09 §3](09-hallway-scenarios.md):
-  - `social_force_factor` defaults to 0, so people walk through each other: always set it;
-  - `type` must be the integer 1;
-  - waypoints are walked in order and looped with `cyclic_goals`;
-  - two people aiming at the same exact point overlap, so jitter waypoints.
-
-You never write this by hand: `Builder` in `generate_campus_scenario.py` does (`set_robot`, `add_pedestrian`,
-`block_rect`, `jitter`, `new_group`).
+- `static`: models from `simulation-setup/entities/obstacles/static/<model>/`; `pos` = [x, y, yaw]. A misspelt
+  model is silently missing (Arena logs `Error spawning entity`).
+- `dynamic`: HuNav pedestrians ([09 §3](09-hallway-scenarios.md)). Gotchas, all enforced by the generator's
+  `check_scenario()` (generation fails otherwise):
+  - force factors and speeds must be **floats**: an integer (`12`) makes Arena's HuNav adapter drop the agent
+    ("must be of type 'float'"), and the episode silently runs without it;
+  - **`cyclic_goals` must stay true**: an agent that reaches its last goal crashes the HuNav Gazebo plugin
+    (segfault in `HuNavSystemPluginIGN::PreUpdate`, the launch dies);
+  - every leg of a route (including last → first) must be in line of sight with body clearance (no path
+    planning), every waypoint ≥ 0.45 m inside the free space;
+  - `type` = 1; `social_force_factor` set (default 0 = people walk through each other).
+- `map`: the per-scenario Nav2 map (§9), written by `scripts/scenario_maps.py` (called for every scenario;
+  `--no-map` to skip).
+- `class` is ours (Arena ignores it); `verify.py` and the previews use it.
 
 ---
 
 ## 5. Panels: adjusting geometry per scenario
 
-We added thin wall panels to simulation-setup (`entities/obstacles/static/panel_*`, commit `f03b9dd1` on `lyu-lab`):
+Thin wall panels in simulation-setup (`entities/obstacles/static/panel_*`, commit `f03b9dd1` on `lyu-lab`):
 
 | Model | Size (x × y × height) |
 |---|---|
 | `panel_x05`, `panel_x1`, `panel_x2`, `panel_x4` | 0.5 / 1 / 2 / 4 m × 0.2 m × 2 m (long along **x**) |
 | `panel_y05`, `panel_y1`, `panel_y2`, `panel_y4` | 0.2 m × 0.5 / 1 / 2 / 4 m × 2 m (long along **y**) |
 
-Origin = the centre of the footprint, on the floor. You rarely place them yourself; the `Builder` does:
+- `b.wall(x0, y0, x1, y1)`: a 0.2 m wall along an axis-aligned line, from the longest panels that fit.
+- `b.block_rect(x0, y0, x1, y1)`: closes off a rectangle with its **outline** in panels, drawn just inside, so the
+  free space ends exactly at its edges. The inside of a block is empty but unreachable (keep that in mind when you
+  measure free space: `params_check.py` uses the free piece that contains a reference point).
 
-- `b.wall(x0, y0, x1, y1)` places a 0.2 m wall along a horizontal or vertical line, built from the longest panels
-  that fit (overlapping as needed).
-- `b.block_rect(x0, y0, x1, y1)` closes off a rectangle: its outline in panels, drawn just *inside* the rectangle
-  so the free space ends exactly at its edges.
-  - **Narrow a corridor:** a strip along each long wall (the worked example).
-  - **Make a door of width w:** one block on each side of the gap.
-
-Rules (verified live, see §11):
-- **Never rotate a panel** (`pos` yaw must be 0). HuNav uses the *unrotated* box, so a panel turned 90° acts on
-  pedestrians as a 4 m bar in the wrong direction. A probe pedestrian got stuck against such a phantom for whole
-  episodes. Use the `x` or `y` variant instead; `wall()` picks it for you.
-- **Name panels by model** (`panel_y4_3`, which `wall()` does). When you switch scenarios without relaunching
-  (§9), Arena only *moves* an obstacle whose name it already knows; it never re-spawns it. A name reused with a
-  different model keeps the *old* shape: in the test, a 4 m panel stayed where a 1.4 m door should have been, and
-  trapped two pedestrians.
-- **Doors ≥ 1.2 m.** 1.4 m was tested and works (pedestrians flowed both ways, ~10 traversals each per episode,
-  no jams). The Jackal is ~0.43 m wide, so try 1.2 m before going lower.
-- **Cost is negligible:** 60 panels changed nothing at real-time speed (RTF 0.98 → 0.99, Gazebo CPU unchanged).
+Rules: **never rotate a panel** (HuNav uses the unrotated box); **name panels by model** (`wall()` does; Arena only
+moves known names across hot switches, never re-spawns them); **doors ≥ 1.2 m**; cost is negligible (60 panels:
+RTF unchanged).
 
 ---
 
 ## 6. Scenario templates
 
-A template is a function `f(campus, b, p)`:
-- `campus` gives you zone rectangles and anchors;
-- `b` is the `Builder` you fill;
-- `p` is the **sampled** parameter dict from the spec.
+![templates, seed 0](img/campus_templates.png)
 
-Register it in `TEMPLATES` and add a block to `stress.yaml` with the same name.
+A template is `f(campus, b, p)`: `campus` gives zones and anchors, `b` is the `Builder`, `p` the **sampled**
+parameters. Building blocks used by all templates:
+- `b.add_on_loop(cls, route, speed, phase=None)`: a pedestrian on a **closed route**, placed at a random point
+  along it (`phase_on_loop`, uniform by length, optionally restricted to some legs). Spreading a population
+  uniformly along its loops from t = 0 is what keeps a zone busy **whenever** the robot arrives (DWB gets
+  everywhere ~4× later than DS-RNN).
+- `b.is_clear(pt)`: ≥ 0.9 m from every other start, ≥ 1.5 m from the robot's start and goal (nobody spawns on the
+  robot or parks on its goal).
+- **Lanes, never one shared line.** Two HuNav people walking the same line in opposite directions meet exactly
+  head-on; the social force then has no sideways component, the goal force (hard-coded 20 in Arena) wins, and
+  they walk *through* each other. Every two-way flow therefore has keep-right lanes ≥ 0.6–0.7 m apart (§8).
 
-### 6.1 Worked example: `corridor_counterflow`
-Read it top to bottom. The pattern every template follows:
-1. **Geometry:** compute what to block from the parameters (`side = (5 m − width) / 2` per wall), then call `block_rect`.
-2. **Robot task:** `b.set_robot(anchor, anchor)`.
-3. **Crowd:** per pedestrian, a speed drawn from `p["speed"]`, a start, and a looping route of jittered waypoints
-   that stays inside the zone (and 0.4 m off the panels).
+### 6.1 `corridor_counterflow`: two-way traffic in a narrowed corridor
+- **Stresses:** passing oncoming people and being overtaken in a corridor 2–4 m wide.
+- **Geometry:** panel strips along both long walls between x = 6 and 22 leave `width` clear (5 m shell).
+- **Robot:** corridor_west (2, 2.5) → corridor_east (26, 2.5), through the whole narrow section.
+- **Crowd:** `n_oncoming` start on their westbound leg (coming at the robot), `n_with` on their eastbound leg.
+  Everyone loops between a west turnaround (x 4.5–6) and an east one (x 22.5–24.5), randomised per person;
+  westbound in the north half, eastbound in the south half (lanes ≥ 0.6 m apart).
+- **Timing:** starts uniform along the starting leg → oncoming people from the first second; loops keep the
+  corridor busy (DWB: 27–33 head-on passes during its ~60 s in the narrow part).
 
-```bash
-uv run scripts/generate_campus_scenario.py scenarios/campus/stress.yaml --only corridor_counterflow --seeds 0 4
-xdg-open worlds/campus/previews/corridor_counterflow_s0.png
-```
+| Parameter | Range |
+|---|---|
+| `width` | 2.0–4.0 m |
+| `n_oncoming` / `n_with` | 6–12 / 0–4 |
+| `speed` (per person) | 0.9–1.5 m/s |
 
 ### 6.2 `door_exit`: doorway against an exiting crowd
-- **Stress:** waiting vs pushing. Can the robot hold back while a crowd comes through a 1 m door, then go?
-- **Expected failures:** freezing forever (DWB), or forcing through people (DS-RNN).
-- **Parameters:** `door_width` 0.9–2.0 m, `n_exiting` 8–20, `speed`.
-- **Pitfalls:**
-  - pedestrians can catch on panel corners: put a waypoint exactly in the door's centre;
-  - start most of the crowd in the plaza, so the exit flow is under way when the robot arrives.
+- **Stresses:** waiting vs pushing at a bottleneck; a crowd streaming down the riser at the robot.
+- **Geometry:** the 5 m opening is closed to a door of `door_width` centred at 32.5 + `door_offset` (clipped so
+  each side block is ≥ 0.5 m), with 1 m-deep blocks (y 29.5–30.5).
+- **Robot:** the riser at (32.5, 24.5) (6 m below the door) → plaza_center (34, 41).
+- **Crowd (`wave: true`, standalone):** `n_exiting` people with homes in the southern plaza (1.8–11 m from the
+  door) all walk out at t = 0: waypoints above, in, and below the door (nobody catches on the frame), down the
+  riser past the robot, through the intersection to a spot 4–18 m along the crossing corridor, mill there
+  (10 points within 2 m, ~20 m of walking), then walk back up through the door home. `n_waiting` people stand
+  beside the door on the plaza side.
+- **Timing:** the exit wave fills the door during the first ~10–30 s: DS-RNN (1 m/s) meets it in the door, DWB
+  (~23 s to the door) meets its tail and everyone walking down the riser at it (DWB: 7–18 people exited while
+  the robot was within 3 m of the door). The return wave (same direction as the robot) reaches the door after
+  ~45 s. Exits and returns are separated **on purpose**: in a single-file door HuNav people cannot take turns.
+- **`wave: false` (gauntlet):** everyone loops plaza ↔ riser through the door at random phases (two-way traffic
+  whenever the robot arrives); needs two lanes, so `door_width ≥ 1.7 m` (lanes w − 1.0 ≥ 0.7 m apart).
+
+| Parameter | Range |
+|---|---|
+| `door_width` | 1.2–2.2 m (gauntlet 1.7–2.4) |
+| `door_offset` | −1 … 1 m |
+| `n_exiting` / `n_waiting` | 10–20 / 0–3 (gauntlet 6–10 / 0–2) |
+| `speed` | 0.8–1.4 m/s |
 
 ### 6.3 `blind_corner`
-- **Stress:** occlusion and reaction time. People appear around the corner with little warning.
-- **Expected failures:** collisions at the corner, especially for fast walkers. DWB only sees them once the lidar
-  does; DS-RNN "sees" through walls (perfect perception), so this template exposes the perception asymmetry most
-  clearly.
-- **Parameters:** `n` 3–8, `speed` up to 2 m/s, optional `width` of the riser.
-- **Pitfall:** timing. Spread start heights so someone is always about to come round the corner.
+- **Stresses:** occlusion and reaction time; people appear from behind the wall corner (30, 5) with little warning.
+- **Geometry:** the L-turn corridor → riser; `riser_width` < 4.5 m narrows the riser above the corner (panels
+  along its east wall, y 5.5–16.5); 4.5–5 leaves the full 5 m.
+- **Robot:** corridor_mid (18, 2.5) → the riser at y = 12 (centred in the possibly narrowed riser).
+- **Crowd:** `n` people loop: down the riser's west side, round the **inside** of the corner (1 m from the hidden
+  wall corner, where the robot turns), west along the corridor's north half to x 24–27, back east along the south
+  half, up the east side, cross over at y 14–17 (≥ 2 m above the robot's goal).
+- **Timing:** the first walkers are **timed**: placed so they reach the corner at a time drawn from each
+  `arrive_at` window ([8, 14] s for DS-RNN's arrival, [35, 55] s for DWB's); the rest are uniform along the loop.
+  DWB saw 4–11 people come round the corner while it was within the corner window.
+
+| Parameter | Range |
+|---|---|
+| `n` | 4–8 (gauntlet 4–6, no timed walkers) |
+| `speed` | 1.0–2.0 m/s |
+| `riser_width` | 3.0–5.0 m |
+| `arrive_at` | windows [8, 14], [35, 55] s |
 
 ### 6.4 `intersection`: crossing streams
-- **Stress:** finding a gap in perpendicular traffic.
-- **Expected failures:** hesitation (long waits), cutting in front, splitting groups.
-- **Parameters:** `n_east` / `n_west` 4–10, `speed`, `group_frac`.
-- **Pitfall:** keep-right lanes (`route_lane` in `generate_scenario.py`), otherwise the streams collide head-on
-  and jam.
+- **Stresses:** finding a gap in perpendicular traffic.
+- **Robot:** riser_mid (32.5, 12) → below_door (32.5, 26), straight across the crossing corridor.
+- **Crowd:** `n_east` start walking +x, `n_west` −x, looping along the crossing corridor between turnarounds at
+  x 17–24 and 41–48 (keep right; each person crosses the riser twice per ~45 m loop). A fraction `group_frac`
+  walk in pairs/triples (shared `group_id`, parallel lanes 0.7 m apart, same phase).
+- **Timing:** starts uniform along the starting leg; DWB saw 31–44 riser crossings per minute while in the zone.
+
+| Parameter | Range |
+|---|---|
+| `n_east` / `n_west` | 4–10 each (gauntlet 3–6) |
+| `speed` | 0.9–1.5 m/s |
+| `group_frac` | 0–0.5 |
 
 ### 6.5 `plaza_dense`
-- **Stress:** density out of distribution. DS-RNN was trained with 5 people and attends to the 5 nearest.
-- **Expected failures:** collisions with the 6th-nearest person; DWB costmap clutter, leading to freezing.
-- **Parameters:** `n` 15–40, `speed`, behaviour mix.
-- **Pitfall:** keep random milling points ≥ 1.5 m off walls, or people pile up against them.
+- **Stresses:** density beyond what DS-RNN was trained on (5 people); milling in all directions.
+- **Robot:** above_door (32.5, 34) → plaza_far (44, 48), an 18 m diagonal.
+- **Crowd:** `n` people mill on loops of 3–5 random points (legs ≥ 3 m) in a band of half-width `band` around
+  the start–goal line (≥ 1.5 m off walls, ≥ 2 m from start/goal); `frac_standing` stand still, `frac_impassive`
+  get HuNav behaviour 2. Density ≈ n / (18 m × 2·band) = 0.1–0.3 people/m². DWB had 4.6–5.7 people within 2 m on
+  average while crossing.
+
+| Parameter | Range |
+|---|---|
+| `n` | 15–35 (gauntlet 12–20) |
+| `band` | 3–5 m |
+| `speed` | 0.5–1.3 m/s |
+| `frac_impassive` / `frac_standing` | 0–0.3 / 0–0.15 |
 
 ### 6.6 `gauntlet`
-All of the above in one long episode: call the other templates, then override the robot task. Do this last.
-
-**Checkpoint C** for each template: generate 3–5 seeds, check the previews, then run one in Arena with `--record`
-and watch the playback. Are people actually going where you intended? Does the stress happen *while the robot is
-there*?
+Every template above with its own (smaller) parameter block, then the robot task corridor_west → plaza_far
+(~80 m, 37–52 people). Every population lives on closed loops in its own zone at random phases, so each zone is
+busy whenever the robot reaches it (DS-RNN reaches the plaza after ~1.5 min, DWB after ~5 min). `door_exit` runs
+with `wave: false` (two-way door traffic, door ≥ 1.7 m); `blind_corner` without timed walkers.
 
 ---
 
-## 7. Procedural generation: seeds, ranges, manifest
+## 7. Procedural generation: seeds, ranges, manifest, checks
 
 ```bash
 uv run scripts/generate_campus_scenario.py scenarios/campus/stress.yaml --seeds 0 29 --no-preview --link
+uv run scripts/generate_campus_scenario.py scenarios/campus/stress.yaml --only door_exit --seeds 0 4
+uv run campus_verification/params_check.py --seeds 30 --fig docs/img/campus_params.png
 ```
-- **Same spec + seed → the same JSON.** Each (template, seed) gets its own random stream, so adding a template
-  doesn't change the others.
-- `worlds/campus/scenarios/manifest.csv` records the **sampled parameters of every scenario file**. In the
-  analysis, join it with the recorded outcomes (the run's `scenario`) to plot e.g. success vs door width or
-  collisions vs density.
-- **Choosing ranges:** start wide, look at where performance falls off a cliff, then sample densely around the
-  cliff. Difficulty *curves* are the result you want, not single averages.
-- **Paired design:** give every planner the *same* scenario files, so comparisons are per-scenario (paired tests,
-  much more statistical power).
+- **Same spec + seed → identical JSON** (each (template, seed) has its own RNG stream; checked for 6 templates
+  × 30 seeds by `params_check.py`).
+- `worlds/campus/scenarios/manifest.csv`: the sampled parameters of every file; join it with recorded outcomes.
+- Every scenario passes `check_scenario()` before it is written (§4), and gets a per-scenario map.
+- Previews: `worlds/campus/previews/` (only `*_s0.png` are committed).
+
+**Do the scenarios respond to their parameters?** (`params_check.py`, 30 seeds per template,
+[output](../campus_verification/params_check.txt)): every parameter spans its range (e.g. corridor width
+2.20–3.94, door width 1.23–2.20, offset −0.97…0.83, n_exiting 10–20, riser width 3.05–4.99, group_frac 0.02–0.48,
+plaza n 15–35); the clear widths **measured from the panels** equal the parameters to ≤ 0.001 m (corridor, door,
+riser; figure below); class counts equal the count parameters; desired speeds stay in their ranges; consecutive
+seeds move the pedestrian starts by 0.55–3.96 m on average.
+
+![geometry vs parameters](img/campus_params.png)
 
 ---
 
-## 8. Making pedestrians react to the robot
+## 8. Pedestrian behaviour: forces, lanes, and what HuNav can't do
 
-HuNav's behaviour types 3–6 (surprised, scared, curious, threatening) need the robot to be tracked, and our HuNav
-plugin has robot tracking commented out. Today pedestrians treat the robot as an obstacle (their obstacle force
-pushes them away from its body), but they never anticipate, yield to or react to it. Re-enabling this is a
-separate task. Until then, use behaviour types 1 and 2 only.
+**Force factors.** Arena hard-codes HuNav's goal force factor to 20 (lightsfm's default is 2), so the old
+hallway values (social 5, obstacle 10) were ~10× too weak *relative to the goal pull*. In dense two-way flows
+people overlapped (< 0.4 m centre distance) 21–24% of the time. Measured (DWB, same seeds, 70 s each):
+
+| social / obstacle | corridor | door (two-way) | intersection | plaza |
+|---|---|---|---|---|
+| 5 / 10 | 23% | 24% | 3% | 9% |
+| 12 / 20 | 10% | 21% | 2% | 7% |
+| 20 / 30 | 9% | 21% | 1% | 4% |
+| **20 / 30 + lanes + one-way door wave (final)** | **4–10%** | **5–8%** | **0–1%** | **5–6%** |
+
+The door didn't improve with forces at all: the remaining overlap came from head-on encounters on the same line
+in the single-file door, fixed by the template design (§6). Obstacle 10 instead of 30 lets people come closer to
+the robot (DWB min clearance 0.07–0.23 m vs 0.26–0.45 m) but they then clip ~0.3 m into panels, so 30 is kept.
+
+**Reacting to the robot.** HuNav behaviours 3–6 need robot tracking, which our HuNav plugin has commented out.
+People treat the robot as an **obstacle** (they swerve around it), never yield to it, anticipate it or react
+socially. lightsfm uses only the **closest** obstacle: when the robot squeezes someone against a wall, the wall
+force is ignored and the person can be pushed partly into it (seen once: 0.53 m for 0.9 s, blind_corner_s1 with
+DS-RNN hugging the inside corner).
 
 ---
 
@@ -307,14 +358,74 @@ Without: an "unknown building" (panels discovered by lidar, phantom-gap replans)
 cleared at every reset, both are well defined and independent of earlier episodes. DS-RNN follows the global path
 without seeing walls itself, so for DS-RNN in panel scenarios the map is close to mandatory.
 
-## 10. Suggested order of work
 
-1. §3 steps 1–3, then checkpoints A and B (drive the empty campus with DWB).
-2. Run the worked example (§6.1) in Arena and watch it.
-3. Write `door_exit`, then `blind_corner`, `intersection` and `plaza_dense`, with checkpoint C after each.
-4. `gauntlet`.
-5. Generate ~10 seeds per template and do a small pilot with DWB and DS-RNN (scheduler + a copy of the
-   first-experiment notebook).
+## 10. Verification (2026-10-11/12)
+
+### 10.1 How the runs were made
+
+`campus_verification/hot_switch.py` runs several scenarios in one launch (same simulator lock and recorder as
+`scripts/arena_batch.py`, which also hot-switches, docs/12). It adds three things the campus runs needed:
+- `--timeout N`: sets the task generator's episode timeout at run time (SetParameters on `timeout`). DS-RNN pins
+  itself on walls; Nav2 then aborts the goal and the episode would idle until the 600 s default.
+- `--prime`: every scenario's first episode is cut short (`reset_task`) and the next one is recorded. Some resets
+  throw pedestrians several metres (§12); a reset into the *same* scenario again is clean.
+- launches with `warmup.json` and **relaunches after a crash** (Gazebo segfaults happened, §12) with what is left.
+
+```bash
+uv run campus_verification/hot_switch.py --planner dwb --prime --timeout 300 --out campus_verification/data/matrix_dwb \
+    corridor_counterflow_s{0,1,2}.json door_exit_s{0,1,2}.json ...
+uv run campus_verification/verify.py campus_verification/data/matrix_dwb --out campus_verification/data/matrix_dwb.csv
+uv run campus_verification/plan_check.py campus_verification/data          # plans through the door?
+```
+Run data: `campus_verification/data/` (gitignored): `matrix_dwb`, `matrix_dsrnn`, `matrix_dsrnn_c`,
+`matrix_dwb_g`, `final_dwb`, `final_dsrnn` (+ one `.csv` per directory from `verify.py`). Every episode has the
+scenario's per-scenario map loaded (`meta.json` `map_loaded`).
+
+`verify.py` computes per episode: the robot (outcome, contacts with people, min clearance, clearance to walls
+**and panels**, freezing); the people (centre inside a wall/panel, deepest body overlap, pedestrian-pedestrian
+overlaps < 0.4 m, stuck agents, walking speed / desired speed, the real-time factor, the post-reset jump); and per
+zone the robot passes, what the crowd did while it was there (head-on passes, people coming round the corner,
+stream crossings, door passages, people within 2 m).
+
+### 10.2 Results
+
+RESULTS_TABLE
+
+![closest approaches, DWB, and the typical DS-RNN failure](img/campus_stress_frames.png)
+
+### 10.3 (a) Is the human behaviour typical?
+
+HUMANS_TEXT
+
+### 10.4 (b) Do scenarios respond to their parameters, and vary across seeds?
+
+- Statically (§7): all parameters span their ranges over 30 seeds; corridor, door and riser widths measured from
+  the panels equal the parameters (≤ 0.001 m); counts and speeds match; same seed → identical JSON.
+- In simulation: the stress tracks the parameters and the seed, e.g. DWB in `door_exit` s0/s1/s2 saw 18 / 15 / 7
+  people exit while it was at the door (n_exiting 18 / 17 / 18, door 1.79 / 1.54 / 1.51 m: with similar parameters the seed alone, via home distances and speeds, changes the wave the robot meets); `intersection` 31 /
+  44 / 38 riser crossings per minute; `blind_corner` 4 / 11 / 5 people round the corner during DWB's pass; plaza
+  4.6 / 5.7 / 4.7 people within 2 m on average. The global plans move with the door: first crossings of y = 30
+  at x = 32.2 / 33.1 / 33.1, i.e. inside each seed's door.
+- Outcomes vary across seeds for DS-RNN (min clearance 0.21–1.67 m, success/pin) but **hardly for DWB**: its
+  times are within ±2 s per template (corridor 105–107 s, door 76–79 s, corner 86–87 s). DWB drives at its
+  0.26 m/s limit almost without stopping (freezing ≤ 2 s) because HuNav people swerve around the robot as an
+  obstacle (§8). Variation in DWB outcomes needs reactive pedestrians, not different scenarios.
+
+### 10.5 (c) Can the Jackal succeed in every scenario?
+
+- **Yes, every scenario is solvable:** DWB succeeded in every template and seed and in both gauntlets
+  (316.9 s and 319.6 s, the same as the empty gauntlet's 318.8 s). Spawn points are clear (start error ≤ 0.04 m for DWB,
+  `check_scenario` keeps start/goal ≥ 0.5 m off panels and people ≥ 1.5 m away), goals are reachable, and
+  **every recorded global plan crosses y = 30 inside the door** (100% of 400+ plans, `plan_check.py`).
+- **Every DS-RNN failure is a policy failure:** the robot wedges itself on a wall or panel end when it swerves
+  away from people (it never sees walls; it only follows the plan's 4 m subgoal). Locations: the mouth of the
+  narrowed corridor (x ≈ 5.9, all 3 corridor runs and both gauntlets, within 7–12 s), under the door blocks
+  (all 3 door runs), the riser wall end at the intersection (1/3). Contacts with people: none.
+- **Scenario/setup problems found and fixed:** pedestrians dropped by integer force factors; HuNav plugin crash
+  with non-cyclic agents; head-on overlaps in single-file doors (exit wave); corridor lanes on one line; plaza
+  walkers dithering on short legs; a deadlock in the gauntlet where the corner walkers' lane ran along the line
+  DWB hugs round the inside corner (people pushed into the stopped robot for 280 s; lane moved).
+- **Setup issues outside the scenarios** (§12): HuNav integrates on wall-clock time; resets can throw people.
 
 ---
 
@@ -367,3 +478,36 @@ Other things to know when writing templates:
 - **Shell walls must be axis-aligned** (HuNav turns every `walls.yaml` segment into a horizontal or vertical box).
 - The global map is 1100 × 1080 cells at 0.05 m for this campus. Fine, but use 0.1 m (`-r 0.1`) if you make it
   much bigger.
+
+---
+
+## 12. Known limitations and open issues
+
+Simulator / infrastructure (not fixable in the scenarios; reported for the Arena/HuNav side):
+1. **HuNav integrates on wall-clock time.** Pedestrian speed in *sim* time = desired / RTF. With 25–50 people the
+   sim runs at RTF 0.65–0.75, so plaza and gauntlet crowds walk 1.3–1.5× faster than their `desired_velocity`
+   (templates with ≤ 20 people: RTF ~0.9–1.0, speeds 0.96–1.05×). `verify.py` reports `speed_ratio` and `rtf`.
+2. **Resets can throw pedestrians.** The first integration step after a reset covers the wall time Gazebo was
+   blocked: usually ~0.7 m, but on some resets 4–22 m, straight through walls (one person spent 146 s outside
+   the floor). It happened on the first reset of a launch and repeatedly on `door_exit_s0`; the gauntlet (~45
+   people) still shows ~3 m after priming. Workaround: `hot_switch.py --prime`; `verify.py` reports
+   `reset_jump` (> 1.5 m = suspect episode). The pedestrian checks skip the first 1 s.
+3. **`cyclic_goals: false` crashes the HuNav Gazebo plugin** once an agent reaches its last goal (segfault in
+   `HuNavSystemPluginIGN::PreUpdate`, the launch dies). All campus routes loop.
+4. **Integer HuNav fields drop the agent silently.** The generator coerces and checks.
+5. **People don't react to the robot** except as an obstacle (§8), and lightsfm considers only the closest
+   obstacle, so a robot can squeeze a person into a wall. Consequence: DWB's outcomes hardly vary (§10.4).
+6. **No path planning for pedestrians:** a stopped robot sitting on someone's line can block them indefinitely
+   (they push into it). The templates keep lanes off the lines planners hug; it can still happen elsewhere.
+7. `scripts/arena_batch.py` has no per-job timeout / priming; `hot_switch.py` fills the gap.
+8. DS-RNN: at the reset the robot is already driving at 1 m/s, so its first recorded sample can be up to 1.2 m
+   from the start (DWB: ≤ 0.04 m).
+
+Scenario design choices to keep in mind:
+- `door_exit` is one-way at a time (exit wave, then return wave); true simultaneous two-way flow only for doors
+  ≥ 1.7 m (gauntlet), because HuNav people can't take turns in a single-file door.
+- Panels are hollow outlines; the inside of a block is unreachable but "free" in a naive free-space computation.
+- Force factors 20/30 trade realism near walls (no clipping) against people coming closer to the robot (§8).
+- The mouth of the narrowed corridor is where DS-RNN wedges itself every time (people turning around there make
+  it swerve). That is a fair test of a wall-blind policy, but if you want DS-RNN to reach the counterflow
+  itself, move the narrowing east or the turnarounds away from the mouth.
