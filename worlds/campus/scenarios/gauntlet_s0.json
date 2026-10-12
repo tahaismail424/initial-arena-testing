@@ -621,12 +621,12 @@
           ],
           [
             31.26,
-            3.65,
+            3.05,
             0.0
           ],
           [
             26.86,
-            3.65,
+            3.05,
             0.0
           ],
           [
@@ -657,14 +657,14 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          29.98,
-          3.68,
+          30.58,
+          3.08,
           0.0
         ],
         "waypoints": [
           [
             26.3,
-            3.68,
+            3.08,
             0.0
           ],
           [
@@ -689,7 +689,7 @@
           ],
           [
             31.14,
-            3.68,
+            3.08,
             0.0
           ]
         ],
@@ -717,12 +717,12 @@
         "waypoints": [
           [
             31.76,
-            3.8,
+            3.2,
             0.0
           ],
           [
             25.01,
-            3.8,
+            3.2,
             0.0
           ],
           [
@@ -775,12 +775,12 @@
           ],
           [
             31.34,
-            3.52,
+            2.92,
             0.0
           ],
           [
             25.08,
-            3.52,
+            2.92,
             0.0
           ],
           [
@@ -1677,14 +1677,14 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          36.62,
-          43.38,
+          36.72,
+          40.86,
           0.0
         ],
         "waypoints": [
           [
-            32.8,
-            40.0,
+            33.55,
+            36.35,
             0.0
           ],
           [
@@ -1715,28 +1715,38 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          39.27,
-          36.22,
+          39.52,
+          41.44,
           0.0
         ],
         "waypoints": [
           [
-            36.58,
-            37.76,
+            37.41,
+            37.13,
             0.0
           ],
           [
-            37.58,
-            41.46,
+            39.09,
+            48.42,
             0.0
           ],
           [
-            39.55,
-            36.06,
+            40.46,
+            37.99,
+            0.0
+          ],
+          [
+            37.15,
+            39.61,
+            0.0
+          ],
+          [
+            41.85,
+            46.18,
             0.0
           ]
         ],
-        "desired_velocity": 1.2,
+        "desired_velocity": 0.61,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -1753,28 +1763,38 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          38.73,
-          44.17,
+          42.91,
+          43.75,
           0.0
         ],
         "waypoints": [
           [
-            39.09,
-            48.42,
+            46.16,
+            47.36,
             0.0
           ],
           [
-            40.46,
-            37.99,
+            33.01,
+            37.41,
             0.0
           ],
           [
-            38.08,
-            36.47,
+            45.79,
+            45.37,
+            0.0
+          ],
+          [
+            36.86,
+            40.94,
+            0.0
+          ],
+          [
+            35.48,
+            35.54,
             0.0
           ]
         ],
-        "desired_velocity": 0.61,
+        "desired_velocity": 0.72,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -1791,56 +1811,8 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          36.32,
-          34.4,
-          0.0
-        ],
-        "waypoints": [
-          [
-            34.94,
-            33.47,
-            0.0
-          ],
-          [
-            32.1,
-            36.93,
-            0.0
-          ],
-          [
-            43.9,
-            45.64,
-            0.0
-          ],
-          [
-            39.21,
-            39.46,
-            0.0
-          ],
-          [
-            36.7,
-            34.66,
-            0.0
-          ]
-        ],
-        "desired_velocity": 1.06,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 2,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_4",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          32.27,
-          37.01,
+          34.29,
+          37.59,
           0.0
         ],
         "waypoints": [
@@ -1850,22 +1822,65 @@
             0.0
           ],
           [
-            35.14,
-            34.35,
+            39.05,
+            42.24,
             0.0
           ],
           [
-            36.01,
-            32.36,
-            0.0
-          ],
-          [
-            32.6,
-            37.77,
+            36.41,
+            38.53,
             0.0
           ]
         ],
-        "desired_velocity": 0.62,
+        "desired_velocity": 0.95,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_4",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          35.42,
+          41.07,
+          0.0
+        ],
+        "waypoints": [
+          [
+            41.1,
+            48.18,
+            0.0
+          ],
+          [
+            39.35,
+            40.01,
+            0.0
+          ],
+          [
+            46.18,
+            45.01,
+            0.0
+          ],
+          [
+            37.32,
+            34.09,
+            0.0
+          ],
+          [
+            33.31,
+            38.43,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.24,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -1882,40 +1897,40 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          38.22,
-          37.89,
+          40.47,
+          37.31,
           0.0
         ],
         "waypoints": [
           [
-            38.04,
-            42.22,
+            39.13,
+            35.68,
             0.0
           ],
           [
-            41.01,
-            50.25,
+            38.42,
+            45.75,
             0.0
           ],
           [
-            31.73,
-            38.13,
+            36.23,
+            41.3,
             0.0
           ],
           [
-            38.32,
-            35.4,
+            45.8,
+            43.76,
             0.0
           ]
         ],
-        "desired_velocity": 1.28,
+        "desired_velocity": 0.99,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
         "goal_radius": 0.6,
         "cyclic_goals": true,
         "behavior": {
-          "type": 1,
+          "type": 2,
           "social_force_factor": 20.0,
           "obstacle_force_factor": 30.0
         }
@@ -1925,33 +1940,28 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          40.72,
-          41.68,
+          35.7,
+          39.08,
           0.0
         ],
         "waypoints": [
           [
-            40.62,
-            43.16,
+            35.28,
+            36.87,
             0.0
           ],
           [
-            41.59,
-            43.49,
+            31.64,
+            37.53,
             0.0
           ],
           [
-            36.22,
-            36.73,
-            0.0
-          ],
-          [
-            40.98,
-            38.12,
+            36.85,
+            45.09,
             0.0
           ]
         ],
-        "desired_velocity": 0.75,
+        "desired_velocity": 1.26,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -1968,35 +1978,45 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          36.88,
-          38.16,
+          33.57,
+          38.52,
           0.0
         ],
         "waypoints": [
           [
-            36.9,
-            35.21,
+            31.4,
+            37.09,
             0.0
           ],
           [
-            32.96,
-            37.28,
+            45.75,
+            43.76,
             0.0
           ],
           [
-            36.85,
-            45.09,
+            41.39,
+            42.33,
+            0.0
+          ],
+          [
+            34.23,
+            31.72,
+            0.0
+          ],
+          [
+            44.02,
+            45.38,
             0.0
           ]
         ],
-        "desired_velocity": 1.23,
+        "desired_velocity": 1.28,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
         "goal_radius": 0.6,
         "cyclic_goals": true,
         "behavior": {
-          "type": 1,
+          "type": 2,
           "social_force_factor": 20.0,
           "obstacle_force_factor": 30.0
         }
@@ -2006,45 +2026,35 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          38.43,
-          39.83,
+          40.65,
+          41.12,
           0.0
         ],
         "waypoints": [
           [
-            39.45,
-            48.7,
+            36.27,
+            37.88,
             0.0
           ],
           [
-            39.27,
-            39.33,
+            40.31,
+            45.22,
             0.0
           ],
           [
-            38.13,
-            34.22,
-            0.0
-          ],
-          [
-            38.43,
-            34.64,
-            0.0
-          ],
-          [
-            37.98,
-            35.98,
+            45.35,
+            44.58,
             0.0
           ]
         ],
-        "desired_velocity": 0.64,
+        "desired_velocity": 0.9,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
         "goal_radius": 0.6,
         "cyclic_goals": true,
         "behavior": {
-          "type": 1,
+          "type": 2,
           "social_force_factor": 20.0,
           "obstacle_force_factor": 30.0
         }
@@ -2054,244 +2064,29 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          33.52,
-          41.49,
+          39.08,
+          42.92,
           0.0
         ],
         "waypoints": [
           [
-            32.75,
-            40.8,
+            40.45,
+            43.94,
             0.0
           ],
           [
-            39.9,
-            38.34,
+            32.41,
+            38.88,
             0.0
           ],
           [
-            44.77,
-            44.05,
+            36.88,
+            38.49,
             0.0
           ],
           [
-            38.31,
-            45.77,
-            0.0
-          ]
-        ],
-        "desired_velocity": 0.75,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 1,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_10",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          40.08,
-          40.97,
-          0.0
-        ],
-        "waypoints": [
-          [
-            36.87,
-            37.95,
-            0.0
-          ],
-          [
-            39.38,
-            35.54,
-            0.0
-          ],
-          [
-            34.89,
-            35.85,
-            0.0
-          ],
-          [
-            30.67,
-            37.83,
-            0.0
-          ],
-          [
-            41.43,
-            42.25,
-            0.0
-          ]
-        ],
-        "desired_velocity": 1.14,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 2,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_11",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          36.35,
-          40.35,
-          0.0
-        ],
-        "waypoints": [
-          [
-            34.15,
-            38.77,
-            0.0
-          ],
-          [
-            37.33,
-            36.24,
-            0.0
-          ],
-          [
-            43.93,
-            45.78,
-            0.0
-          ]
-        ],
-        "desired_velocity": 0.83,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 1,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_12",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          38.73,
-          41.99,
-          0.0
-        ],
-        "waypoints": [
-          [
-            37.43,
-            46.57,
-            0.0
-          ],
-          [
-            33.09,
-            38.55,
-            0.0
-          ],
-          [
-            37.69,
-            34.21,
-            0.0
-          ],
-          [
-            39.21,
-            40.33,
-            0.0
-          ]
-        ],
-        "desired_velocity": 0.97,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 1,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_13",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          38.54,
-          36.78,
-          0.0
-        ],
-        "waypoints": [
-          [
-            35.46,
-            33.08,
-            0.0
-          ],
-          [
-            35.41,
-            34.61,
-            0.0
-          ],
-          [
-            40.03,
-            43.36,
-            0.0
-          ],
-          [
-            43.99,
-            43.31,
-            0.0
-          ]
-        ],
-        "desired_velocity": 0.74,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 2,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
-        "name": "milling_14",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          40.5,
-          43.34,
-          0.0
-        ],
-        "waypoints": [
-          [
-            44.03,
-            45.79,
-            0.0
-          ],
-          [
-            40.66,
-            50.21,
-            0.0
-          ],
-          [
-            40.7,
-            48.01,
-            0.0
-          ],
-          [
-            38.19,
-            41.73,
+            33.16,
+            38.51,
             0.0
           ]
         ],
@@ -2308,28 +2103,157 @@
         }
       },
       {
-        "name": "milling_15",
+        "name": "milling_10",
         "model": "actor1",
         "type": 1,
         "pos": [
-          37.52,
-          44.49,
+          40.09,
+          43.1,
           0.0
         ],
         "waypoints": [
           [
-            41.45,
-            49.29,
+            46.09,
+            47.02,
             0.0
           ],
           [
-            36.03,
-            44.87,
+            43.16,
+            45.31,
             0.0
           ],
           [
-            35.04,
-            37.57,
+            35.27,
+            39.96,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.12,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_11",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          36.71,
+          36.9,
+          0.0
+        ],
+        "waypoints": [
+          [
+            34.16,
+            42.63,
+            0.0
+          ],
+          [
+            36.69,
+            36.2,
+            0.0
+          ],
+          [
+            36.61,
+            42.71,
+            0.0
+          ],
+          [
+            36.54,
+            33.54,
+            0.0
+          ],
+          [
+            36.83,
+            36.61,
+            0.0
+          ]
+        ],
+        "desired_velocity": 0.77,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_12",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          42.26,
+          49.13,
+          0.0
+        ],
+        "waypoints": [
+          [
+            40.26,
+            37.16,
+            0.0
+          ],
+          [
+            36.78,
+            44.97,
+            0.0
+          ],
+          [
+            41.8,
+            46.4,
+            0.0
+          ],
+          [
+            33.0,
+            40.18,
+            0.0
+          ],
+          [
+            42.3,
+            49.4,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.28,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_13",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          40.29,
+          44.76,
+          0.0
+        ],
+        "waypoints": [
+          [
+            41.58,
+            45.67,
+            0.0
+          ],
+          [
+            45.87,
+            46.07,
             0.0
           ],
           [
@@ -2338,7 +2262,93 @@
             0.0
           ]
         ],
-        "desired_velocity": 1.11,
+        "desired_velocity": 1.21,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_14",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          41.46,
+          44.62,
+          0.0
+        ],
+        "waypoints": [
+          [
+            45.17,
+            44.23,
+            0.0
+          ],
+          [
+            37.72,
+            41.51,
+            0.0
+          ],
+          [
+            36.62,
+            37.21,
+            0.0
+          ],
+          [
+            38.2,
+            44.97,
+            0.0
+          ]
+        ],
+        "desired_velocity": 1.02,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 1,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_15",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          35.27,
+          33.98,
+          0.0
+        ],
+        "waypoints": [
+          [
+            34.85,
+            33.46,
+            0.0
+          ],
+          [
+            38.72,
+            37.77,
+            0.0
+          ],
+          [
+            38.29,
+            42.07,
+            0.0
+          ],
+          [
+            43.78,
+            44.59,
+            0.0
+          ]
+        ],
+        "desired_velocity": 0.6,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -2355,33 +2365,76 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          35.2,
-          40.22,
+          39.8,
+          38.41,
           0.0
         ],
         "waypoints": [
           [
-            31.73,
-            38.38,
+            39.35,
+            37.12,
             0.0
           ],
           [
-            33.04,
-            39.6,
+            30.68,
+            37.09,
             0.0
           ],
           [
-            45.17,
-            44.23,
+            36.26,
+            35.13,
             0.0
           ],
           [
-            43.36,
-            44.52,
+            40.44,
+            40.23,
             0.0
           ]
         ],
-        "desired_velocity": 1.04,
+        "desired_velocity": 1.18,
+        "group_id": -1,
+        "class": "milling",
+        "radius": 0.35,
+        "goal_radius": 0.6,
+        "cyclic_goals": true,
+        "behavior": {
+          "type": 2,
+          "social_force_factor": 20.0,
+          "obstacle_force_factor": 30.0
+        }
+      },
+      {
+        "name": "milling_17",
+        "model": "actor1",
+        "type": 1,
+        "pos": [
+          34.44,
+          39.92,
+          0.0
+        ],
+        "waypoints": [
+          [
+            37.3,
+            43.5,
+            0.0
+          ],
+          [
+            43.58,
+            40.78,
+            0.0
+          ],
+          [
+            38.18,
+            45.46,
+            0.0
+          ],
+          [
+            31.69,
+            36.48,
+            0.0
+          ]
+        ],
+        "desired_velocity": 0.72,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
@@ -2394,87 +2447,49 @@
         }
       },
       {
-        "name": "milling_17",
-        "model": "actor1",
-        "type": 1,
-        "pos": [
-          38.33,
-          41.07,
-          0.0
-        ],
-        "waypoints": [
-          [
-            38.5,
-            39.8,
-            0.0
-          ],
-          [
-            36.62,
-            37.21,
-            0.0
-          ],
-          [
-            38.2,
-            44.97,
-            0.0
-          ],
-          [
-            37.78,
-            45.42,
-            0.0
-          ]
-        ],
-        "desired_velocity": 0.68,
-        "group_id": -1,
-        "class": "milling",
-        "radius": 0.35,
-        "goal_radius": 0.6,
-        "cyclic_goals": true,
-        "behavior": {
-          "type": 2,
-          "social_force_factor": 20.0,
-          "obstacle_force_factor": 30.0
-        }
-      },
-      {
         "name": "milling_18",
         "model": "actor1",
         "type": 1,
         "pos": [
-          37.86,
-          35.28,
+          31.54,
+          37.53,
           0.0
         ],
         "waypoints": [
           [
-            45.23,
-            42.76,
+            29.58,
+            36.56,
             0.0
           ],
           [
-            33.39,
-            39.03,
+            37.27,
+            42.55,
             0.0
           ],
           [
-            37.03,
-            34.06,
+            37.11,
+            38.29,
             0.0
           ],
           [
-            37.64,
-            35.06,
+            43.27,
+            43.6,
+            0.0
+          ],
+          [
+            46.25,
+            44.79,
             0.0
           ]
         ],
-        "desired_velocity": 0.93,
+        "desired_velocity": 0.86,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,
         "goal_radius": 0.6,
         "cyclic_goals": true,
         "behavior": {
-          "type": 2,
+          "type": 1,
           "social_force_factor": 20.0,
           "obstacle_force_factor": 30.0
         }
@@ -2484,28 +2499,38 @@
         "model": "actor1",
         "type": 1,
         "pos": [
-          34.41,
-          35.85,
+          38.36,
+          41.01,
           0.0
         ],
         "waypoints": [
           [
-            36.01,
-            32.93,
+            37.51,
+            40.47,
             0.0
           ],
           [
-            45.13,
-            45.42,
+            39.99,
+            45.62,
             0.0
           ],
           [
-            32.67,
-            39.03,
+            35.61,
+            43.76,
+            0.0
+          ],
+          [
+            45.62,
+            44.77,
+            0.0
+          ],
+          [
+            40.95,
+            42.67,
             0.0
           ]
         ],
-        "desired_velocity": 0.56,
+        "desired_velocity": 0.75,
         "group_id": -1,
         "class": "milling",
         "radius": 0.35,

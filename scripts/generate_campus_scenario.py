@@ -391,7 +391,7 @@ def blind_corner(campus, b, p):
     the corner (panels along its east wall, y 5.5..16.5); 4.5..5 leaves it at the full 5 m.
     Robot: corridor_mid (18, 2.5) -> the riser at y = 12 (centred in the possibly narrowed riser).
     Crowd: p["n"] people on a loop: down the riser on its west side (keep right), round the INSIDE of the corner
-    (1 m from the hidden wall corner, exactly where the robot turns), west along the corridor's north half to
+    (1 m from the hidden wall corner, exactly where the robot turns), west along the corridor (y 2.8..3.6, off the wall-hugging line) to
     x 24..27, back east along the south half, up the riser's east side, cross over at the top (y 14..17, >= 2 m
     above the robot's goal). Speeds p["speed"] up to 2 m/s = little reaction time.
     Timing: the first len(p["arrive_at"]) people are "timed": each is placed on its loop so that it reaches the
@@ -419,7 +419,10 @@ def blind_corner(campus, b, p):
         x_d = b.rng.uniform(rx0 + 0.7, rx0 + w / 2 - 0.25)        # down lane (west side of the riser)
         x_u = b.rng.uniform(rx0 + w / 2 + 0.25, rx0 + w - 0.7)    # up lane (east side)
         y_top = b.rng.uniform(goal_y + 2.0, y_narrow_top + 0.5)
-        y_w = b.rng.uniform(cy1 - 1.6, cy1 - 0.8)                 # westbound lane (north half of the corridor)
+        # westbound lane: north of the centre but >= 1.4 m off the north wall. Planners hug the wall round the
+        # inside corner; a lane ON that line put the walkers' turn point under a stopped robot and HuNav people
+        # (no path planning) pushed into it for minutes (DWB gauntlet_s1, first attempt).
+        y_w = b.rng.uniform(cy1 - 2.2, cy1 - 1.4)
         y_e = b.rng.uniform(cy0 + 0.8, cy0 + 1.6)                 # eastbound lane (south half)
         x_west = b.rng.uniform(24.0, 27.0)
         route = [(x_d, y_top), (x_d, y_w), (x_west, y_w), (x_west, y_e), (x_u, y_e), (x_u, y_top)]
