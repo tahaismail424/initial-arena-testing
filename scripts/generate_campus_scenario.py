@@ -493,7 +493,7 @@ def plaza_dense(campus, b, p):
 
     Geometry: the plaza (x 20..48, y 30..52); no panels (the shell's 5 m opening to the riser stays open).
     Robot: above_door (32.5, 34) -> plaza_far (44, 48), a ~18 m diagonal.
-    Crowd: p["n"] people milling around the robot's path: each walks a loop of 3-5 random points in a band of
+    Crowd: p["n"] people milling around the robot's path: each walks a loop of 3-5 random points (legs >= 3 m) in a band of
     half-width p["band"] around the start-goal line (inside the plaza, >= 1.5 m off its walls, >= 2 m from the
     robot's start and goal), so the density is p["n"] / (~18 m x 2 * band). A fraction p["frac_standing"] stand
     still (chatting), p["frac_impassive"] get HuNav behaviour 2 (IMPASSIVE) instead of 1 (REGULAR).
@@ -526,7 +526,11 @@ def plaza_dense(campus, b, p):
                     break
             b.add_pedestrian("standing", q, [(q[0] + 0.3, q[1]), q], 0.5, hunav=hunav)
             continue
-        route = [point() for _ in range(b.rng.randint(3, 5))]
+        route, k_pts = [point()], b.rng.randint(3, 5)
+        while len(route) < k_pts or math.dist(route[-1], route[0]) < 3.0:
+            q = point()
+            if math.dist(q, route[-1]) >= 3.0:      # short legs made slow walkers dither around one spot
+                route.append(q)
         b.add_on_loop("milling", route, b.rng.uniform(*p["speed"]), hunav=hunav)
 
 
